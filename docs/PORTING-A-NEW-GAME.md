@@ -41,6 +41,7 @@ Always launch with a log: `REPO_LOG=/tmp/game.log tools/launch.sh <dir> <App> <a
 | game quits: `Steam not initialized` | `natives.py --steam`, Steam running + signed in, `SteamAppId` set |
 | `EntryPointNotFoundException: SteamAPI_Steam…_v0NN` | the borrowed libsteam_api is too old for that flat-API symbol → shim it |
 | `dlopen … code signature invalid` | re-sign copied dylibs |
+| a native call returns `BadArguments`/garbage though the library is the real one | **variadic C functions called with fixed arguments** (Apple arm64 passes variadic args on the stack): look at the P/Invoke *EntryPoint* (ImplMap) and wrap it with a non-variadic export (see `voice_shim.c`) |
 | pink / black objects, no log line | a shader variant wasn't translated (`untranslated_variants` in the injector stats) |
 | the whole scene black, UI visible | a post-processing shader misrenders — try `SKIP_SHADER=<name>` |
 

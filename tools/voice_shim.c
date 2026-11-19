@@ -1,14 +1,25 @@
-// libopus_egpv: Photon Voice calls Opus through a renamed "opus_egpv" with non-variadic ctl helpers. Everything else is stock libopus (re-exported).
-// ctl_set tuning calls (FEC, DTX, complexity...) never fail the codec: Photon throws on any non-OK status, and these are optional.
-#include <opus.h>
+// libopus_egpv: Photon Voice P/Invokes libopus' *variadic* opus_encoder_ctl / opus_decoder_ctl with a fixed (ptr, int, int-or-pointer) signature.
+// On Apple arm64, variadic arguments travel on the stack, so a plain call from managed code hands libopus garbage (-> BadArguments / silent codec failure).
+// These non-variadic exports take the third argument in a register and forward it to the real variadic functions. Everything else is stock libopus (re-exported).
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-static void note(const char* tag, void* st, int req, int val, int r) {
-    static const char* path; static int init; if (!init) { path = getenv("OPUS_SHIM_LOG"); init = 1; }
-    if (!path) return; FILE* f = fopen(path, "a"); if (f) { fprintf(f, "%s st=%p req=%d val=%d -> %d\n", tag, st, req, val, r); fclose(f); }
+#include <unistd.h>
+#include <dlfcn.h>
+typedef int (*ctl_t)(void*, int, ...);
+static ctl_t real_enc, real_dec;
+__attribute__((constructor)) static void init(void) {
+    real_enc = (ctl_t)dlsym(RTLD_NEXT, "opus_encoder_ctl"); real_dec = (ctl_t)dlsym(RTLD_NEXT, "opus_decoder_ctl");
+    FILE* f = fopen("/tmp/opus_shim_alive.log", "a"); if (f) { fprintf(f, "shim loaded pid=%d enc=%p dec=%p\n", (int)getpid(), (void*)real_enc, (void*)real_dec); fclose(f); }
 }
-static int optional(int req) { return req == 4012 || req == 4016 || req == 4010 || req == 4014 || req == 4024 || req == 4006 || req == 4020 || req == 4022; }
-int opus_encoder_ctl_set(OpusEncoder* st, int request, int value) { int r = opus_encoder_ctl(st, request, value); note("enc_set", st, request, value, r); return (r != 0 && optional(request)) ? 0 : r; }
-int opus_encoder_ctl_get(OpusEncoder* st, int request, int* value) { int r = opus_encoder_ctl(st, request, value); note("enc_get", st, request, value ? *value : -999, r); return r; }
-int opus_decoder_ctl_set(OpusDecoder* st, int request, int value) { int r = opus_decoder_ctl(st, request, value); note("dec_set", st, request, value, r); return r; }
-int opus_decoder_ctl_get(OpusDecoder* st, int request, int* value) { int r = opus_decoder_ctl(st, request, value); note("dec_get", st, request, value ? *value : -999, r); return r; }
+static void note(const char* tag, void* st, int req, long arg, int r) {
+    static const char* path; static int inited; if (!inited) { path = getenv("OPUS_SHIM_LOG"); inited = 1; }
+    if (!path) return; FILE* f = fopen(path, "a"); if (f) { fprintf(f, "%s st=%p req=%d arg=%ld -> %d\n", tag, st, req, arg, r); fclose(f); }
+}
+// OPUS_SET_* requests are even (4000, 4002...), OPUS_GET_* are odd: GET takes a pointer, SET takes an int.
+static int call(ctl_t real, const char* tag, void* st, int req, long arg) {
+    int r = (req & 1) ? real(st, req, (int32_t*)arg) : real(st, req, (int32_t)arg);
+    note(tag, st, req, arg, r); return r;
+}
+int opus_encoder_ctl(void* st, int request, long arg) { return call(real_enc, "enc", st, request, arg); }
+int opus_decoder_ctl(void* st, int request, long arg) { return call(real_dec, "dec", st, request, arg); }

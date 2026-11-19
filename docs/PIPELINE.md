@@ -69,7 +69,8 @@ The game's `Plugins/x86_64/*.dll` cannot load. Managed code P/Invokes them by *n
 * **Steam:** any installed Steam game ships a universal `libsteam_api.dylib`; the tool picks one that exports `SteamInternal_SteamAPI_Init` and adds a tiny shim for flat-API calls newer than that SDK
   (`SteamAPI_SteamUGC_v020`, … implemented via `SteamInternal_FindOrCreateUserInterface`). Borrowed dylibs must be **re-signed** after copying (`codesign --force -s -`) or `dlopen` fails with *code signature invalid*.
 * **Discord Social SDK:** no macOS build available → no-op stand-in (stops a DllNotFoundException every frame, which cost real CPU).
-* **Photon Voice:** `opus_egpv` is stock Opus with non-variadic ctl helpers → Homebrew libopus + `voice_shim.c`; `webrtc-audio` (echo cancel/AGC/NS) → pass-through with an energy VAD; `AudioIn` → no native mics.
+* **Apple-arm64 variadic trap (found the hard way):** Photon declares the P/Invokes `opus_encoder_ctl_set/_get` with *entry point* `opus_encoder_ctl` — libopus' **variadic** function — and calls it with fixed arguments. On Apple arm64 variadic arguments are passed on the *stack*, so libopus read garbage (`InbandFec … BadArguments`, voice codec never created). `voice_shim.c` exports non-variadic `opus_encoder_ctl`/`opus_decoder_ctl` that forward to the real variadic ones (GET requests are odd numbers and take a pointer). Check the real entry names with the ImplMap table (`tools/natives.py` docs / dnfile), not the managed method names.
+* **Photon Voice:** `opus_egpv` is stock Opus → Homebrew libopus + `voice_shim.c`; `webrtc-audio` (echo cancel/AGC/NS) → pass-through with an energy VAD; `AudioIn` → no native mics.
 * **`repo_tweaks.dylib`** (injected via `DYLD_INSERT_LIBRARIES`): scales mouse deltas (macOS reports far smaller deltas than Windows raw input), disables App Nap (audio died when unfocused), and optionally calls `Shader.WarmupAllShaders()` through the Mono API.
 
 ### 6. Sign and launch — `launch.sh`
