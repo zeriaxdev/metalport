@@ -8,7 +8,10 @@ OVERLAY=""; if [[ -n "$APPID" ]]; then
   export SteamAppId=$APPID SteamGameId=$APPID; STEAM_MACOS="$HOME/Library/Application Support/Steam/Steam.AppBundle/Steam/Contents/MacOS"
   [[ -z "$NO_OVERLAY" && -f "$STEAM_MACOS/gameoverlayrenderer.dylib" ]] && OVERLAY=":$STEAM_MACOS/gameoverlayrenderer.dylib"; fi
 export DYLD_INSERT_LIBRARIES="$TWEAKS$OVERLAY"
-[[ -n "$REPO_LOG" ]] && export OPUS_SHIM_LOG="${REPO_LOG%.*}.opus.log"
+# always keep the last run's log (and the Opus call log) so problems can be diagnosed after the fact
+LOGDIR="$HOME/Library/Logs/MacPorts-Unity"; mkdir -p "$LOGDIR"; REPO_LOG="${REPO_LOG:-$LOGDIR/$NAME.log}"
+[[ -f "$REPO_LOG" ]] && mv -f "$REPO_LOG" "${REPO_LOG%.log}.prev.log"
+export REPO_LOG OPUS_SHIM_LOG="${REPO_LOG%.log}.opus.log"
 MARK="$HOME/Library/Application Support/MacPorts-Unity/$NAME-warmup-v1.done"
 if [[ "${WARMUP:-auto}" == "1" || ( "${WARMUP:-auto}" == "auto" && ! -f "$MARK" ) ]]; then export REPO_WARMUP=1 REPO_WARMUP_MARK="$MARK"; fi
-exec "./$NAME.app/Contents/MacOS/$NAME" -logfile "${REPO_LOG:-/dev/null}" "$@"
+exec "./$NAME.app/Contents/MacOS/$NAME" -logfile "$REPO_LOG" "$@"
