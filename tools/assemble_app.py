@@ -4,7 +4,7 @@ usage: assemble_app.py --data <Game>_Data --unity <fetch_unity out dir> --out <d
 result: <out>/<AppName>.app and <out>/Resources (symlink the Addressables path hack needs)"""
 import argparse, glob, hashlib, os, shutil, subprocess, sys
 ap = argparse.ArgumentParser(); ap.add_argument('--data', required=True); ap.add_argument('--unity', required=True); ap.add_argument('--out', required=True)
-ap.add_argument('--name', required=True); ap.add_argument('--bundle-id'); ap.add_argument('--dev', action='store_true'); a = ap.parse_args()
+ap.add_argument('--name', required=True); ap.add_argument('--bundle-id'); ap.add_argument('--dev', action='store_true'); ap.add_argument('--icon', help='optional .icns to use as the app icon'); a = ap.parse_args()
 here = os.path.dirname(os.path.abspath(__file__)); sh = lambda *c: subprocess.run(c, check=True)
 payload = os.path.dirname(glob.glob(f'{a.unity}/module/**/Payload/Variations', recursive=True)[0])
 var = f'{payload}/Variations/macos_arm64_player_{"development" if a.dev else "nondevelopment"}_mono/UnityPlayer.app/Contents'
@@ -16,6 +16,7 @@ for f in os.listdir(f'{var}/Frameworks'): sh('cp', '-c', f'{var}/Frameworks/{f}'
 src = f'{payload}/Source/Player/MacPlayer/MacPlayerEntryPoint'
 sh('cp', f'{src}/Info.plist', f'{C}/Info.plist'); sh('cp', '-c', '-R', f'{src}/Resources/MainMenu.nib', f'{src}/Resources/PlayerIcon.icns', f'{C}/Resources/')
 sh('cp', '-c', '-R', a.data, f'{C}/Resources/Data'); sh('cp', '-c', '-R', f'{payload}/MonoBleedingEdge', f'{C}/MonoBleedingEdge')
+if a.icon: shutil.copyfile(a.icon, f'{C}/Resources/PlayerIcon.icns')
 for k, v in (('CFBundleExecutable', a.name), ('CFBundleIdentifier', a.bundle_id or f'local.port.{a.name.lower()}'), ('CFBundleName', a.name), ('CFBundleShortVersionString', '1'),
              ('CFBundleVersion', '1'), ('UnityBuildNumber', '1'), ('CFBundleGetInfoString', f'{a.name} port'), ('LSApplicationCategoryType', 'public.app-category.games'),
              ('NSMicrophoneUsageDescription', 'This game uses the microphone for voice chat.')): sh('plutil', '-replace', k, '-string', v, f'{C}/Info.plist')
