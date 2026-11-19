@@ -27,5 +27,9 @@
     "vertex inputs whose mesh format is an unsigned/short type must not be declared as signed int in MSL (generic HLSLcc post-pass candidate)",
     "keep CPU-filled lighting buffers enabled when compute effects are disabled",
     "AssetBundles also contain shaders: patch bundles, not only data files"
+  ],
+  "toolkit_usage": [
+    "Codex copied tools/ unchanged (inject.py, inject_inplace.py, xlate_all.py, metalsub.py, dxbc_rdef.py were byte-identical to this repo) and added only tools/patch_bundles.py (now upstreamed here).",
+    "The final app was produced by the adopted upstream converter, not by this toolkit: it has its own shader 'upgrade' passes on the translated MSL (color-output ABI, texture dimension queries, transparent/fixed (inline) samplers, clip distances for portals, recovered cage shader, unsigned light indices) plus Burst arm64 compilation and Cecil patches - game-specific, but several are generic repair classes (see docs/PIPELINE.md 'Open problems')."
   ]
 }

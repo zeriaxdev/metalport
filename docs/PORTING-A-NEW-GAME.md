@@ -45,7 +45,7 @@ Always launch with a log: `REPO_LOG=/tmp/game.log tools/launch.sh <dir> <App> <a
 | the whole scene black, UI visible | a post-processing shader misrenders — try `SKIP_SHADER=<name>` |
 
 ## 5. Things you will probably still hit
-* **AssetBundles with shaders** (Addressables): not patched yet. UnityPy can load bundles; the same Shader patch applies but bundles must be re-packed (compressed container) — new work.
+* **AssetBundles with shaders** (Addressables / `StreamingAssets`): run `tools/patch_bundles.py <bundle>...` from `tools/` (contributed by the Codex session that ported ULTRAKILL: patches each serialized file inside a UnityFS bundle with the same append technique, re-packs with LZ4, and asserts every non-shader object is byte-identical). It also accepts loose serialized files.
 * **Input:** mouse deltas are small → `REPO_MOUSE_SCALE`; keyboard layout switching can spam the log.
 * **Window titles / Win32 calls** (`user32.dll FindWindow`) throw once per call; harmless unless the game depends on them.
 * **Performance:** the player runs at the display's native resolution and refresh (ProMotion 120 Hz) → cap frame rate or lower resolution in-game if the laptop runs hot.

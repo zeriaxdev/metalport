@@ -84,3 +84,6 @@ The game's `Plugins/x86_64/*.dll` cannot load. Managed code P/Invokes them by *n
   Suspects: texture-array/`Load` instructions, half-precision paths, or one of the effect shaders now being active. Untested.
 * StructuredBuffer (instancing) variants and geometry/tessellation/compute shaders are not translated.
 * A small corner square in R.E.P.O. renders with a missing-variant shader (not identified).
+
+## AssetBundles
+`tools/patch_bundles.py` applies the same Shader patch inside UnityFS bundles (re-packed with LZ4) and verifies that every other object is unchanged. Untested on a bundle that actually contains shaders in this repo; used by the ULTRAKILL port (55 patched files).
