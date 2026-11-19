@@ -1,0 +1,11 @@
+# the game and Valve/Unity binaries never go in git
+REPO.app/
+Resources
+*.dylib
+*.a
+tools/cache/
+tools/h2m
+__pycache__/
+*.bak
+.DS_Store
+.impeccable/
