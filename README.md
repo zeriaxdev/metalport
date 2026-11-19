@@ -54,6 +54,7 @@ R.E.P.O. is wired up already: `./run.sh` launches the build in `REPO.app/` (not 
 | `tools/natives.py` + `*.c`, `repo_tweaks.m` | Steam / Discord / Photon-voice / mouse / warm-up stand-ins |
 | `tools/launch.sh`, `run.sh` | launchers |
 | `docs/` | how it works, porting guide, R.E.P.O. notes |
+| `games/` | per-game data (Steam ids, depot manifests = supported versions, status, issues) for R.E.P.O., ULTRAKILL, Lethal Company |
 
 ## Status and versions
 See [CHANGELOG.md](CHANGELOG.md). Current: see [VERSION](VERSION).

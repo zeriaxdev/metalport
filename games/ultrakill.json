@@ -1,0 +1,31 @@
+{
+  "name": "ULTRAKILL",
+  "steam_appid": 1229490,
+  "engine": "Unity 2022.3.29f1",
+  "scripting": "Mono",
+  "render": "built-in (+ compute post effects, disabled)",
+  "windows_depot": {
+    "id": 1229491,
+    "manifest": "22957324"
+  },
+  "supported_versions": "Per the adopted upstream converter: (1) the original Windows build used during development (the user's existing CrossOver copy) and (2) Steam depot 1229491 manifest 22957324. It verifies required game files and REJECTS other versions; every game update needs a new 'verified patch pack'. Newer-version-only changes (portal/blood patches) are applied only for the newer depot; older builds read disabledComputeShaders from LocalPrefs.json.",
+  "status": "working in the Codex session: native arm64 + Metal, menu and tutorial render at 3024x1898 ~120 fps; campaign playthrough not yet verified; compute-shader effects (outline, palette LUT) disabled; Steam init OK, overlay/cloud untested",
+  "owner": "Codex session (do not modify its app/fixtures); upstream source: github.com/Yash-Singh1/ultrakill-mac (adopted at 0384137d)",
+  "approach_differences": [
+    "translates shaders to Metal 2.2 (HLSLcc plus HLSL decompiler/vkd3d/SPIRV-Cross for recovery)",
+    "compiles the game's Burst routines for arm64+x64",
+    "patches managed code with Cecil (Windows memory-layout accesses, blood decals, portal clipping)",
+    "replaces Windows chess engine with a universal Stockfish",
+    "profile/saves under ~/Library/Application Support/ULTRAKILL Mac/<profile id>/"
+  ],
+  "known_issues": [
+    "Metal 'Vertex attribute TEXCOORD4 of type int2 cannot be read using MTLAttributeFormatUShort2' -> fixed by declaring Master vertex input as uint2 and as_type<int2> at use (1232 variants)",
+    "compute shader effects disabled",
+    "Intel path only tested via Rosetta"
+  ],
+  "lessons_for_toolkit": [
+    "vertex inputs whose mesh format is an unsigned/short type must not be declared as signed int in MSL (generic HLSLcc post-pass candidate)",
+    "keep CPU-filled lighting buffers enabled when compute effects are disabled",
+    "AssetBundles also contain shaders: patch bundles, not only data files"
+  ]
+}

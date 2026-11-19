@@ -1,0 +1,40 @@
+{
+  "name": "R.E.P.O.",
+  "steam_appid": 3241660,
+  "engine": "Unity 6000.3.28f1",
+  "scripting": "Mono",
+  "render": "built-in / Shader Graph / Amplify (not HDRP)",
+  "windows_depot": {
+    "id": 3241661,
+    "manifest": "4238581831212146714",
+    "game_version": "v0.5.2",
+    "steam_buildid": 26732417,
+    "download_gb": 1.0
+  },
+  "supported_versions": "Built and verified against manifest 4238581831212146714 (v0.5.2). A game update changes the manifest: re-download the depot and re-run tools/port.py (the pipeline is generic; expect it to just work unless the update adds new native plugins or shader stages).",
+  "status": "playable: menu, tutorial, levels at ~110-130 fps (3024x1898, Apple M5); Steam overlay works; voice unverified; post-processing (Uber) off",
+  "owner": "Claude session (this repo)",
+  "toolkit_version": "0.3.0",
+  "port_command": "tools/port.py --data <REPO_Data> --unity <work/unity> --out <dir> --name REPO --skip-shader Hidden/PostProcessing/Uber ; tools/natives.py --tweaks --steam --discord --voice",
+  "native_plugins": {
+    "steam_api64": "borrowed arm64 libsteam_api + shim (5 newer flat-API calls)",
+    "discord_partner_sdk": "no-op stub",
+    "opus_egpv": "libopus 1.6.1 + ctl shim",
+    "webrtc-audio": "pass-through + energy VAD stub",
+    "AudioIn": "stub",
+    "libonigwrap": "not needed so far"
+  },
+  "settings": {
+    "file": "~/Library/Application Support/<bundle id>/SettingsData.es3 (Easy Save, JSON text)",
+    "keys": "Bloom, ChromaticAberration, Grain, MotionBlur, LensEffect, GlitchLoop, MaxFPS (default 144), Vsync, RenderSize, MicDevice, PushToTalk, ProximityVoice, AimSensitivity",
+    "note": "toggling the six effect keys does not fix the Uber shader bug"
+  },
+  "known_issues": [
+    "Hidden/PostProcessing/Uber translates but renders wrong (dark scene + chromatic ghosting) -> skipped, so bloom/lens/grain are off",
+    "voice chat shims untested in a real room",
+    "corner square = a missing-variant material (45 StructuredBuffer instancing variants untranslated), unidentified",
+    "invites untested with a friend",
+    "mods unsupported (no arm64 BepInEx)",
+    "first launch warm-up ~68 s"
+  ]
+}
