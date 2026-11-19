@@ -1,0 +1,35 @@
+{
+  "name": "Five Nights at Freddy's (Clickteam Fusion 2.5 family)",
+  "steam_appid": 319510,
+  "engine": "Clickteam Fusion 2.5 (single .exe, Windows 32-bit, DirectX 9)",
+  "exe_layout": "PE32 stub (~1 MB) + ~230 MB overlay beginning with the 'wwww' pack marker, then PAMU (Unicode) game data - verified on FNAF 1",
+  "status": "feasibility only; nothing ported",
+  "candidates": [
+    {
+      "name": "KlikCore2 (Jackhiles/KlikCore2)",
+      "kind": "clean-room Rust runtime (Macroquad/cpal/symphonia)",
+      "loads": "compiled .exe directly (PE overlay -> wwww pack -> PAME/PAMU)",
+      "macos": "not mentioned (Windows/Linux/Android documented); Macroquad is cross-platform",
+      "license": "not stated",
+      "maturity": "README milestone table all 'done'; 0 stars; extension objects are the most common gap; FNAF compatibility not stated"
+    },
+    {
+      "name": "NuclearRT (nuclearrt/nuclearrt)",
+      "kind": "C++ runtime (SDL3/SDL2), AGPL-3.0",
+      "loads": "needs a Fusion-side exporter on Windows with Clickteam Fusion 2.5 installed (project, not a finished exe)",
+      "macos": "listed (Intel & Apple Silicon)",
+      "maturity": "'not ready for general use'; sub-applications unsupported"
+    },
+    {
+      "name": "CTFAK2.0 / NebulaFD",
+      "kind": "decompilers (C#), CTFAK archived Nov 2024, AGPL-3.0",
+      "note": "decompile exe to MFA/assets; not players"
+    },
+    {
+      "name": "Chowdren",
+      "kind": "Fusion->C++ runtime; GPL until 2016, then private/commercial; needs the Fusion project, macOS command line only"
+    }
+  ],
+  "recommendation": "Try KlikCore2 first (it reads the exe as-is). Review the source before building (unknown author, no license text, downloads a SoundFont on first run). Fallback: CrossOver tuning.",
+  "safety_note": "Claude did not build or run KlikCore2: unvetted third-party code; the user should review and run it themselves."
+}
