@@ -3,7 +3,7 @@
   "steam_appid": 319510,
   "engine": "Clickteam Fusion 2.5 (single .exe, Windows 32-bit, DirectX 9)",
   "exe_layout": "PE32 stub (~1 MB) + ~230 MB overlay beginning with the 'wwww' pack marker, then PAMU (Unicode) game data - verified on FNAF 1",
-  "status": "feasibility only; nothing ported",
+  "status": "FNAF 1-4, Sister Location, Pizzeria Simulator packaged as .app bundles (2026-11-20) around a user-built KlikCore2; FNAF 1 confirmed running by the user; the others untested",
   "candidates": [
     {
       "name": "KlikCore2 (Jackhiles/KlikCore2)",
@@ -31,5 +31,6 @@
     }
   ],
   "recommendation": "Try KlikCore2 first (it reads the exe as-is). Review the source before building (unknown author, no license text, downloads a SoundFont on first run). Fallback: CrossOver tuning.",
-  "safety_note": "Claude did not build or run KlikCore2: unvetted third-party code; the user should review and run it themselves."
+  "safety_note": "Claude did not build or run KlikCore2: unvetted third-party code; the user should review and run it themselves.",
+  "packaging": "tools/make_fusion_app.py wraps a game folder (APFS clone) + the klikcore binary + an icon extracted from the exe into a signed .app; launcher sets KLIKCORE_DISCORD=off by default. Output used: <workdir>/fnaf/apps/"
 }
