@@ -3,7 +3,8 @@
 # Sets the Metal HUD, the tweaks library (mouse scale, App Nap off, first-run shader warm-up), and the Steam overlay/app id when given.
 DIR="$1"; NAME="$2"; APPID="$3"; shift 3 2>/dev/null; cd "$DIR" || exit 1
 TWEAKS="$PWD/$NAME.app/Contents/Plugins/repo_tweaks.dylib"
-export MTL_HUD_ENABLED=1 REPO_MOUSE_SCALE=${REPO_MOUSE_SCALE:-2.5}
+[[ -z "$NO_HUD" ]] && export MTL_HUD_ENABLED=1   # NO_HUD=1 hides the Metal HUD
+export REPO_MOUSE_SCALE=${REPO_MOUSE_SCALE:-2.5}
 OVERLAY=""; if [[ -n "$APPID" ]]; then
   export SteamAppId=$APPID SteamGameId=$APPID; STEAM_MACOS="$HOME/Library/Application Support/Steam/Steam.AppBundle/Steam/Contents/MacOS"
   [[ -z "$NO_OVERLAY" && -f "$STEAM_MACOS/gameoverlayrenderer.dylib" ]] && OVERLAY=":$STEAM_MACOS/gameoverlayrenderer.dylib"; fi
