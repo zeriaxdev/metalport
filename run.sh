@@ -1,3 +1,3 @@
 #!/bin/zsh
-# R.E.P.O. launcher: Metal HUD on, Steam overlay, mouse scale, first-run shader warm-up (see tools/launch.sh).
-cd "${0:A:h}" && exec tools/launch.sh "$PWD" REPO 3241660 "$@"
+# R.E.P.O.: same as double-clicking R.E.P.O.app (its launcher sets up Metal HUD, Steam, overlay, tweaks and checks Steam).
+exec "${0:A:h}/R.E.P.O.app/Contents/MacOS/launch" "$@"

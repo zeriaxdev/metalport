@@ -40,7 +40,7 @@ codesign --force --deep -s - work/out/Game.app
 tools/launch.sh work/out Game <steam app id>
 ```
 
-R.E.P.O. is wired up already: `./run.sh` launches the build in `REPO.app/` (not in git).
+R.E.P.O. is wired up already: double-click `R.E.P.O.app` (not in git; `./run.sh` opens it too).
 
 ## Layout
 

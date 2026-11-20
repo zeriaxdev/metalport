@@ -1,6 +1,7 @@
 import sys, os, struct, bisect, collections, UnityPy, lz4.block
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from metalsub import *
+import cbfix
 from UnityPy.enums import ShaderGpuProgramType as T
 S = os.path.dirname(os.path.abspath(__file__))
 def tname(v):
@@ -39,14 +40,36 @@ def patch_shader(tt, stats):
     subs, multi = read_subs(tt, pi, blob)
     types = [struct.unpack_from('<I', s, 4)[0] if len(s) >= 8 else -1 for s in subs]
     if any(tname(t).startswith(BAD) for t in types): stats['skip_unsupported_stage'] += 1; return False
-    done = {}; new = []
+    mtl = {}
     for i, s in enumerate(subs):
         if types[i] in VS_TYPES | PS_TYPES and b'DXBC' in s:
             p = f'{S}/cache/{dxbc_hash(s)}.metal'
-            if os.path.exists(p):
-                new.append(build_metal_sub(s, open(p, 'rb').read())); done[i] = True; continue
-            stats['untranslated_variants'] += 1
-        new.append(s)
+            if os.path.exists(p): mtl[i] = open(p, 'rb').read()
+            else: stats['untranslated_variants'] += 1
+    users = collections.defaultdict(list); inpass = {}     # Unity 2020.2+: parameter blob index -> translated programs that use it
+    for ss in tt['m_ParsedForm']['m_SubShaders']:
+        for ps in ss['m_Passes']:
+            for st in ('progVertex', 'progFragment'):
+                stg = ps.get(st) or {}
+                for g, grp in enumerate(stg.get('m_PlayerSubPrograms', [])):
+                    for e, pidx in zip(grp, stg['m_ParameterBlobIndices'][g]):
+                        if e['m_BlobIndex'] in mtl and e['m_BlobIndex'] not in users[pidx]: users[pidx].append(e['m_BlobIndex'])
+                        inpass.setdefault(id(ps), set()).add(pidx)
+    allocs = {}
+    for pids in inpass.values():                           # one free-register allocator per pass (vertex + fragment share $Globals)
+        al = cbfix.pass_alloc([subs[q] for q in pids])
+        for q in pids: allocs.setdefault(q, al)
+    params = {}
+    for pidx, progs in users.items():                      # float3 clobber fix (cbfix.py), all users of a table or none
+        pl = cbfix.plan(subs[pidx], allocs.get(pidx))
+        if not pl: continue
+        fixed = {i: cbfix.patch_msl(mtl[i], pl[1], pl[2]) for i in progs}
+        if any(v is None for v in fixed.values()): stats['cbfix_refused'] += 1; continue
+        mtl.update(fixed); params[pidx] = pl[0]; stats['cbfix_scalars_moved'] += len(pl[1])
+    done = {}; new = []
+    for i, s in enumerate(subs):
+        if i in mtl: new.append(build_metal_sub(s, mtl[i])); done[i] = True
+        else: new.append(params.get(i, s))
     if not done: stats['skip_nothing_translated'] += 1; return False
     raws = pack_chunks(new, multi); comps = [lz4.block.compress(r, store_size=False, mode='high_compression', compression=9) for r in raws]
     new_offs, pos = [], len(blob)
@@ -76,6 +99,51 @@ def patch_shader(tt, stats):
     if 'stageCounts' in tt: tt['stageCounts'].insert(k, 2)      # absent in Unity 2019.x
     tt['compressedBlob'] = blob + b''.join(comps)
     stats['shaders_patched'] += 1; stats['subprograms_metal'] += len(done)
+    return True
+
+def refix_metal(tt, stats):
+    """Apply the cbfix float3 fix to a shader that already got Metal programs without it (Unity 2020.2+ layout).  Rebuilds the affected
+    Metal programs from the D3D ones + cached MSL and replaces the platform-14 blob; D3D data untouched."""
+    plats = tt['platforms']
+    if 14 not in plats or 4 not in plats: return False
+    blob = bytes(tt['compressedBlob']); k = plats.index(14)
+    subs4, _ = read_subs(tt, plats.index(4), blob); subs14, multi = read_subs(tt, k, blob)
+    if len(subs4) != len(subs14): stats['refix_layout_mismatch'] += 1; return False
+    users = collections.defaultdict(list); inpass = {}
+    for ss in tt['m_ParsedForm']['m_SubShaders']:
+        for ps in ss['m_Passes']:
+            for st in ('progVertex', 'progFragment'):
+                stg = ps.get(st) or {}
+                for g, grp in enumerate(stg.get('m_PlayerSubPrograms', [])):
+                    for e, pidx in zip(grp, stg['m_ParameterBlobIndices'][g]):
+                        i = e['m_BlobIndex']
+                        if e['m_GpuProgramType'] in METAL.values():
+                            if i not in users[pidx]: users[pidx].append(i)
+                            inpass.setdefault(id(ps), set()).add(pidx)
+    allocs = {}
+    for pids in inpass.values():
+        al = cbfix.pass_alloc([subs14[q] for q in pids])
+        for q in pids: allocs.setdefault(q, al)
+    new = list(subs14); changed = False
+    for pidx, progs in users.items():
+        pl = cbfix.plan(subs14[pidx], allocs.get(pidx))
+        if not pl: continue
+        fixed = {}
+        for i in progs:
+            p = f'{S}/cache/{dxbc_hash(subs4[i])}.metal' if b'DXBC' in subs4[i] else None
+            if not p or not os.path.exists(p): fixed = None; break
+            fixed[i] = cbfix.patch_msl(open(p, 'rb').read(), pl[1], pl[2])
+            if fixed[i] is None: fixed = None; break
+        if not fixed: stats['cbfix_refused'] += 1; continue
+        for i, msl in fixed.items(): new[i] = build_metal_sub(subs4[i], msl)
+        new[pidx] = pl[0]; changed = True; stats['cbfix_scalars_moved'] += len(pl[1])
+    if not changed: return False
+    raws = pack_chunks(new, multi); comps = [lz4.block.compress(r, store_size=False, mode='high_compression', compression=9) for r in raws]
+    offs, pos = [], len(blob)
+    for c in comps: offs.append(pos); pos += len(c)
+    tt['offsets'][k] = offs; tt['compressedLengths'][k] = [len(c) for c in comps]; tt['decompressedLengths'][k] = [len(r) for r in raws]
+    tt['compressedBlob'] = blob + b''.join(comps)           # ponytail: old Metal chunk stays as dead bytes; a full re-port drops it
+    stats['shaders_refixed'] += 1
     return True
 
 if __name__ == '__main__':

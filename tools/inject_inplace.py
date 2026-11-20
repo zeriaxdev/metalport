@@ -2,7 +2,8 @@
 original file and only their object-table entries (24 bytes each) + the header file size are edited."""
 import sys, os, struct, collections, UnityPy
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from inject import patch_shader
+from inject import patch_shader, refix_metal
+fix = refix_metal if os.environ.get("REFIX") else patch_shader     # REFIX=1: add the float3 fix to Metal programs injected before cbfix existed
 data_dir = sys.argv[1]; env = UnityPy.load(data_dir); stats = collections.Counter(); per_file = collections.defaultdict(list)
 for obj in env.objects:
     if obj.type.name != 'Shader': continue
@@ -11,7 +12,7 @@ for obj in env.objects:
         raw0 = bytes(obj.get_raw_data()); tt = obj.read_typetree()
         if stats['rt'] < 20:                # genuine round-trip check: unmodified typetree must re-serialize to identical bytes
             stats['rt'] += 1; stats['rt_identical'] += bytes(obj.save_typetree(tt)) == raw0
-        if patch_shader(tt, stats):
+        if fix(tt, stats):
             new_raw = bytes(obj.save_typetree(tt)); path = next(k for k, v in env.files.items() if v is obj.assets_file)
             assert len(new_raw) > old_size, 'serialized shader did not grow'
             per_file[path].append((obj.path_id, old_start, old_size, new_raw))

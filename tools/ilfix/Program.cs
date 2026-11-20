@@ -27,6 +27,28 @@ if (mode == "calls")                                // ilfix calls <dll> <member
     }
     return;
 }
+if (mode == "returnfalse")                          // ilfix returnfalse <dll> <Type full name> <method>: make a bool method return false (keeps <dll>.orig)
+{
+    var rres = new DefaultAssemblyResolver(); rres.AddSearchDirectory(Path.GetDirectoryName(Path.GetFullPath(dir))!);
+    var md = ModuleDefinition.ReadModule(new MemoryStream(File.ReadAllBytes(dir)), new ReaderParameters { AssemblyResolver = rres });
+    var me = md.GetTypes().First(t => t.FullName == args[2]).Methods.First(m => m.Name == args[3] && m.ReturnType.FullName == "System.Boolean");
+    me.Body.Instructions.Clear(); me.Body.ExceptionHandlers.Clear(); me.Body.Variables.Clear();
+    var ip = me.Body.GetILProcessor(); ip.Append(ip.Create(OpCodes.Ldc_I4_0)); ip.Append(ip.Create(OpCodes.Ret));
+    if (!File.Exists(dir + ".orig")) File.Copy(dir, dir + ".orig");
+    md.Write(dir); Console.WriteLine($"{args[2]}::{args[3]} now returns false"); return;
+}
+if (mode == "nocompute")                            // ilfix nocompute <dll>: SystemInfo.supportsComputeShaders reads as false inside this assembly
+{                                                   // (PostProcessing v2 then uses its fragment-shader fallbacks; the toolkit has no Metal compute shaders)
+    var nres = new DefaultAssemblyResolver(); nres.AddSearchDirectory(Path.GetDirectoryName(Path.GetFullPath(dir))!);
+    var md = ModuleDefinition.ReadModule(new MemoryStream(File.ReadAllBytes(dir)), new ReaderParameters { AssemblyResolver = nres }); int n = 0;
+    foreach (var me in md.GetTypes().SelectMany(t => t.Methods).Where(x => x.HasBody))
+        foreach (var ins in me.Body.Instructions)
+            if (ins.OpCode == OpCodes.Call && ins.Operand is MethodReference r && r.Name == "get_supportsComputeShaders" && r.DeclaringType.FullName == "UnityEngine.SystemInfo")
+            { ins.OpCode = OpCodes.Ldc_I4_0; ins.Operand = null; n++; }
+    if (n > 0) { if (!File.Exists(dir + ".orig")) File.Copy(dir, dir + ".orig"); md.Write(dir); }
+    Console.WriteLine($"{Path.GetFileName(dir)}: {n} supportsComputeShaders reads -> false");
+    return;
+}
 var res = new DefaultAssemblyResolver(); res.AddSearchDirectory(dir);
 var rp = new ReaderParameters { AssemblyResolver = res };
 ModuleDefinition? compat = null;

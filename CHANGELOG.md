@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.5.0 (2026-11-21)
+- R.E.P.O.: post-processing on (bloom, lens distortion, chromatic aberration, grain, vignette, AO, motion blur); corner square fixed.
+  Color grading stays off for now (HDR LUT baker bakes a constant LUT on Metal; see docs/GAME-NOTES-REPO.md).
+- `tools/cbfix.py`: float3-overwrite fix for Unity 2020.2+ data (parameter blobs), registers chosen per pass; used by `inject.py`.
+  `REFIX=1 inject_inplace.py <Data>` applies it to shaders injected before.
+- `ilfix nocompute <dll>` (SystemInfo.supportsComputeShaders -> false, so PostProcessing v2 uses fragment fallbacks) and
+  `ilfix returnfalse <dll> <Type> <method>`.
+- `tools/make_launcher.py`: apps start by double-click (Steam/overlay/HUD/tweaks set up inside), with "Steam not running" and
+  "Steam couldn't confirm ownership" dialogs. R.E.P.O. build is now `R.E.P.O.app`.
+- `tools/steam_entry.py` (generalised from the Buckshot Roulette port): Steam shows Play for the Mac app; records OS-less depots as
+  installed so Steam doesn't want the Windows files.
+- `tools/bench_trace.py`: FPS, 1 % lows, render size, GPU busy, CPU, memory from a Metal System Trace (native or CrossOver).
+- UnityCompat.Diag: live commands `cam`, `camcomp`, `volmask`, `ppfx`, `pplist`, `ui`, `dump` (layer PNGs + LUT stats), `res`.
+
 ## 0.4.0 (2026-11-20)
 - Legacy Unity path (2019.x data on the 2021.3 arm64 player), proven on Outer Wilds: `tools/legacy/` (`convert_data.py`, `make_json.py`,
   `validate_typetrees.py`), `tools/shader2021.py`, `tools/ilfix/` (Mono.Cecil IL rewriter + `UnityCompat` shims). docs/LEGACY-UNITY.md,

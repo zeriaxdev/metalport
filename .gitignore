@@ -1,5 +1,5 @@
 # the game and Valve/Unity binaries never go in git
-REPO.app/
+R.E.P.O.app/
 Resources
 *.dylib
 *.a

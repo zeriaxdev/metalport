@@ -72,6 +72,77 @@ namespace UnityCompat
                 foreach (var line in System.IO.File.ReadAllLines(cf))
                 {
                     var w = line.Split(' '); if (w.Length < 2) continue;
+                    if (w[0] == "cam") foreach (var c in Resources.FindObjectsOfTypeAll<Camera>()) if (c.name == w[1].Replace("_", " ") || (c.targetTexture && c.targetTexture.name.Contains(w[1].Replace("_", " ")))) { c.enabled = w[2] == "1"; Debug.Log($"[diag] cam {c.name} -> {c.enabled}"); }
+                    if (w[0] == "ui") foreach (var g in Object.FindObjectsOfType<RectTransform>())
+                    {
+                        var comp = g.GetComponents<Component>().FirstOrDefault(k => k.GetType().Name is "RawImage" or "Image"); if (comp == null) continue;
+                        var cs = new Vector3[4]; g.GetWorldCorners(cs); var cv = g.GetComponentInParent<Canvas>(); var ucam = cv && cv.renderMode != RenderMode.ScreenSpaceOverlay ? cv.worldCamera : null;
+                        Vector2 a0 = RectTransformUtility.WorldToScreenPoint(ucam, cs[0]), a2 = RectTransformUtility.WorldToScreenPoint(ucam, cs[2]);
+                        if (a0.x > 400 || a0.y > 400 || a2.x - a0.x > 600) continue;
+                        var tex = comp.GetType().GetProperty("mainTexture")?.GetValue(comp) as Texture;
+                        Debug.Log($"[diag] ui {comp.GetType().Name} {g.name} parent={(g.parent ? g.parent.name : "-")} screen=({a0.x:F0},{a0.y:F0})-({a2.x:F0},{a2.y:F0}) canvas={(cv ? cv.name + " " + cv.renderMode : "-")} tex={(tex ? tex.name + " " + tex.width + "x" + tex.height : "-")}");
+                    }
+                    if (w[0] == "dump")                                             // save every camera target and the final screen as PNGs into w[1]
+                    {
+                        System.IO.Directory.CreateDirectory(w[1]);
+                        foreach (var c in Camera.allCameras)
+                        {
+                            var rt = c.targetTexture; if (!rt || !rt.IsCreated()) continue;
+                            var prev = RenderTexture.active; RenderTexture.active = rt;
+                            var t = new Texture2D(rt.width, rt.height, TextureFormat.RGBA32, false); t.ReadPixels(new Rect(0, 0, rt.width, rt.height), 0, 0); t.Apply();
+                            RenderTexture.active = prev;
+                            System.IO.File.WriteAllBytes($"{w[1]}/{c.name.Replace(' ', '_')}_{rt.name.Replace(' ', '_')}.png", ImageConversion.EncodeToPNG(t)); Object.Destroy(t);
+                        }
+                        foreach (var rt in Resources.FindObjectsOfTypeAll<RenderTexture>())        // and every LUT render texture (post-processing color grading)
+                        {
+                            if (!rt || !rt.IsCreated() || !rt.name.ToLower().Contains("lut") || rt.dimension != UnityEngine.Rendering.TextureDimension.Tex2D) continue;
+                            var prev = RenderTexture.active; RenderTexture.active = rt;
+                            var t = new Texture2D(rt.width, rt.height, TextureFormat.RGBAFloat, false); t.ReadPixels(new Rect(0, 0, rt.width, rt.height), 0, 0); t.Apply(); RenderTexture.active = prev;
+                            var px = t.GetPixels(); float mx = 0, mean = 0; foreach (var c in px) { mx = Mathf.Max(mx, c.r); mean += c.r; }
+                            Debug.Log($"[diag] lut {rt.name} {rt.width}x{rt.height} {rt.graphicsFormat} red mean={mean / px.Length:F4} max={mx:F4} first={px[0]} last={px[px.Length - 1]}");
+                            Object.Destroy(t);
+                        }
+                        ScreenCapture.CaptureScreenshot($"{w[1]}/screen.png"); Debug.Log("[diag] dumped to " + w[1]);
+                    }
+                    if (w[0] == "ppfx")                                             // ppfx <SettingsType> 0|1: post-processing effect on/off in every volume profile (PPv2, by reflection)
+                        foreach (var v in Object.FindObjectsOfType<MonoBehaviour>())
+                        {
+                            if (v.GetType().Name != "PostProcessVolume") continue;
+                            const System.Reflection.BindingFlags F = System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+                            var prof = v.GetType().GetField("sharedProfile", F)?.GetValue(v); if (prof == null) continue;
+                            var list = prof.GetType().GetField("settings", F)?.GetValue(prof) as System.Collections.IList; if (list == null) continue;
+                            foreach (var st in list)
+                            {
+                                if (st == null || st.GetType().Name != w[1]) continue;
+                                var en = st.GetType().GetField("enabled", F)?.GetValue(st); if (en == null) continue;
+                                en.GetType().GetField("value", F)?.SetValue(en, w[2] == "1"); en.GetType().GetField("overrideState", F)?.SetValue(en, true);
+                                Debug.Log($"[diag] ppfx {v.name}/{w[1]} -> {w[2]}");
+                            }
+                        }
+                    if (w[0] == "pplist")                                           // post-processing components and the effects in their profiles
+                        foreach (var v in Object.FindObjectsOfType<MonoBehaviour>())
+                        {
+                            var tn = v.GetType().Name; if (!tn.Contains("PostProcess")) continue;
+                            const System.Reflection.BindingFlags F = System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+                            var info = $"[diag] pp {tn} on {v.name} enabled={v.enabled}";
+                            if (tn == "PostProcessLayer") foreach (var fn in new[] { "antialiasingMode", "volumeLayer", "stopNaNPropagation", "finalBlitToCameraTarget", "breakBeforeColorGrading", "fog", "m_ShowToolkit" })
+                                { object fv = null; try { fv = v.GetType().GetField(fn, F)?.GetValue(v); } catch { } if (fv is LayerMask lm) fv = lm.value.ToString("x"); else if (fv != null && fv.GetType().GetField("enabled") != null) fv = "fog.enabled=" + fv.GetType().GetField("enabled").GetValue(fv); info += $" {fn}={fv}"; }
+                            foreach (var fn in new[] { "sharedProfile", "m_Profile", "profile" })
+                            {
+                                object prof = null; try { prof = v.GetType().GetField(fn, F)?.GetValue(v) ?? v.GetType().GetProperty(fn, F)?.GetValue(v); } catch { }
+                                if (!(prof is Object po) || !po) continue;
+                                var list = prof.GetType().GetField("settings", F)?.GetValue(prof) as System.Collections.IList;
+                                if (list != null) foreach (var st in list) if (st != null) { var en = st.GetType().GetField("enabled", F)?.GetValue(st); info += $" | {fn}:{st.GetType().Name}={en?.GetType().GetField("value", F)?.GetValue(en)}"; }
+                            }
+                            Debug.Log(info);
+                        }
+                    if (w[0] == "camcomp")                                          // camcomp <camera name with _> <Type> 0|1: one component on one camera
+                        foreach (var c in Resources.FindObjectsOfTypeAll<Camera>())
+                            if (c.name == w[1].Replace("_", " ")) foreach (var b in c.GetComponents<Behaviour>()) if (b.GetType().Name == w[2]) { b.enabled = w[3] == "1"; Debug.Log($"[diag] camcomp {c.name}/{w[2]} -> {b.enabled}"); }
+                    if (w[0] == "volmask")                                          // volmask <camera name with _> <int>: PostProcessLayer.volumeLayer of that camera
+                        foreach (var c in Resources.FindObjectsOfTypeAll<Camera>())
+                            if (c.name == w[1].Replace("_", " ")) foreach (var b in c.GetComponents<Behaviour>()) if (b.GetType().Name == "PostProcessLayer")
+                            { var fi = b.GetType().GetField("volumeLayer"); fi.SetValue(b, (LayerMask)int.Parse(w[2])); Debug.Log($"[diag] volmask {c.name} -> {w[2]}"); }
                     if (w[0] == "res") Screen.SetResolution(int.Parse(w[1]), int.Parse(w[2]), Screen.fullScreenMode);
                     if (w[0] == "shadows") QualitySettings.shadows = w[1] == "0" ? ShadowQuality.Disable : ShadowQuality.All;
                     if (w[0] == "comp") foreach (var b in Object.FindObjectsOfType<MonoBehaviour>()) if (b.GetType().Name == w[1]) b.enabled = w[2] == "1";
@@ -94,6 +165,12 @@ namespace UnityCompat
                     var m = r.sharedMaterial;
                     Debug.Log($"[diag] pick vis={r.isVisible} {r.name} parent={(r.transform.parent ? r.transform.parent.name : "-")} dist={p0.z:F0} ext={r.bounds.extents.magnitude:F0} layer={r.gameObject.layer} shader={(m && m.shader ? m.shader.name : "-")} kw={(m ? string.Join(" ", m.shaderKeywords) : "")} q={(m ? m.renderQueue : 0)} tex={(m && m.mainTexture ? m.mainTexture.name + " " + m.mainTexture.width : "-")}");
                 }
+            }
+            if (mode.Contains("cams"))                                       // every camera and the screen area it draws to (a small one drawing to the screen = a corner square)
+            {
+                foreach (var c in Camera.allCameras)
+                    Debug.Log($"[diag] cam {c.name} parent={(c.transform.parent ? c.transform.parent.name : "-")} enabled={c.enabled} depth={c.depth} pixelRect={c.pixelRect} rect={c.rect} target={(c.targetTexture ? $"{c.targetTexture.name} {c.targetTexture.width}x{c.targetTexture.height} {c.targetTexture.graphicsFormat} created={c.targetTexture.IsCreated()}" : "SCREEN")} mask={c.cullingMask:x}");
+                Debug.Log($"[diag] screen {Screen.width}x{Screen.height}");
             }
             if (mode.Replace("bg", "").Trim(',').Length == 0) return;         // nothing else asked: stay cheap
             if (mode.Contains("game") && Time.realtimeSinceStartup > 45)   // skip the menu like its Resume button: async load, then allow the transition
@@ -138,7 +215,7 @@ namespace UnityCompat
                     Debug.Log($"[diag] blit {sn}: supported={sh.isSupported} passes={mat.passCount} -> {ReadRT(rt)}");
                     RenderTexture.ReleaseTemporary(rt); Object.Destroy(mat);
                 }
-            if (mode.Split(',').All(t => t is "bg" or "game" or "big" or "fps" or "sweep")) return;   // the scans below run every tick: only when asked
+            if (mode.Split(',').All(t => t is "bg" or "game" or "big" or "fps" or "sweep" or "cams")) return;   // the scans below run every tick: only when asked
             var cam = Camera.main ?? (Camera.allCamerasCount > 0 ? Camera.allCameras[0] : null);
             if (cam != null && mode.Contains("probe"))                         // heavy: offscreen renders, scene scans
             {
