@@ -20,12 +20,16 @@ for obj in env.objects:
         if stats['errors'] < 4: print('ERR', obj.path_id, type(e).__name__, e)
 print(dict(stats))
 for path, items in per_file.items():
-    d = bytearray(open(path, 'rb').read()); doff = struct.unpack('>q', d[32:40])[0]; tbl_end = doff
+    d = bytearray(open(path, 'rb').read()); v22 = struct.unpack('>I', d[8:12])[0] >= 22        # format 22 (Unity 6): 64-bit offsets; 21 (2019-2022): 32-bit
+    doff = struct.unpack('>q', d[32:40])[0] if v22 else struct.unpack('>I', d[12:16])[0]; tbl_end = doff
+    fmt = '<qqI' if v22 else '<qII'
     for pid, old_start, old_size, new_raw in items:
         old_rel = old_start - doff
-        key = struct.pack('<qqI', pid, old_rel, old_size); at = d.find(bytes(key), 0, tbl_end)
+        key = struct.pack(fmt, pid, old_rel, old_size); at = d.find(bytes(key), 0, tbl_end)
         assert at > 0, ('table entry not found', pid)
         d += b'\0' * (-(len(d) - doff) % 8); new_rel = len(d) - doff; d += new_raw
-        d[at:at + 20] = struct.pack('<qqI', pid, new_rel, len(new_raw))
-    d[24:32] = struct.pack('>q', len(d))
+        d[at:at + len(key)] = struct.pack(fmt, pid, new_rel, len(new_raw))
+    assert v22 or len(d) < 2**32, 'format-21 file would exceed 4 GiB'
+    if v22: d[24:32] = struct.pack('>q', len(d))
+    else: d[4:8] = struct.pack('>I', len(d))
     open(path, 'wb').write(d); print('patched', os.path.basename(path), len(items), 'shaders; file', len(d) // 1048576, 'MiB')

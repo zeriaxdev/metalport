@@ -16,7 +16,8 @@ Download the Windows build (Steam Mac can't install Windows-only games; use the 
 | Native plugins | each is a work item (see §3) |
 | Addressables | path fix is automatic; bundles may contain more shaders (see §4) |
 
-Quick check of required Unity version: `strings <Data>/globalgamemanagers | head -1`.
+Quick check of required Unity version: `strings <Data>/globalgamemanagers | head -1`. **2019.x – 2020.1** has no arm64 player: follow
+[LEGACY-UNITY.md](LEGACY-UNITY.md) instead (runs the data on a 2021.3 player; several times the work).
 
 ## 2. Run the pipeline
 See the README quick start. `tools/port.py` is idempotent per output folder (delete the `.app` to redo). Re-running after a game update: re-download the depot, run it again.
@@ -44,6 +45,8 @@ Always launch with a log: `REPO_LOG=/tmp/game.log tools/launch.sh <dir> <App> <a
 | a native call returns `BadArguments`/garbage though the library is the real one | **variadic C functions called with fixed arguments** (Apple arm64 passes variadic args on the stack): look at the P/Invoke *EntryPoint* (ImplMap) and wrap it with a non-variadic export (see `voice_shim.c`) |
 | pink / black objects, no log line | a shader variant wasn't translated (`untranslated_variants` in the injector stats) |
 | the whole scene black, UI visible | a post-processing shader misrenders — try `SKIP_SHADER=<name>` |
+
+Testing without taking over the screen, live toggles, FPS logging, GPU tracing: see the debug kit in [LEGACY-UNITY.md](LEGACY-UNITY.md#debug-kit-also-useful-for-new-player-ports).
 
 ## 5. Things you will probably still hit
 * **AssetBundles with shaders** (Addressables / `StreamingAssets`): run `tools/patch_bundles.py <bundle>...` from `tools/` (contributed by the Codex session that ported ULTRAKILL: patches each serialized file inside a UnityFS bundle with the same append technique, re-packs with LZ4, and asserts every non-shader object is byte-identical). It also accepts loose serialized files.

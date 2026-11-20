@@ -56,6 +56,13 @@ def patch_shader(tt, stats):
         for ps in ss['m_Passes']:
             for st in ('progVertex', 'progFragment'):
                 stg = ps[st]
+                if 'm_PlayerSubPrograms' not in stg:      # Unity 2019.x: one flat list, parameters inline, no blob-index lists
+                    grp = stg['m_SubPrograms']; add = []
+                    for e in grp:
+                        if e['m_GpuProgramType'] in VS_TYPES | PS_TYPES and done.get(e['m_BlobIndex']):
+                            ne = dict(e); ne['m_GpuProgramType'] = METAL['VS'] if e['m_GpuProgramType'] in VS_TYPES else METAL['PS']; add.append(ne)
+                    grp.extend(add); stats['entries_added'] += len(add)
+                    continue
                 for g, grp in enumerate(stg['m_PlayerSubPrograms']):
                     add, addp = [], []
                     for e, pidx in zip(grp, stg['m_ParameterBlobIndices'][g]):
@@ -65,7 +72,8 @@ def patch_shader(tt, stats):
                     grp.extend(add); stg['m_ParameterBlobIndices'][g].extend(addp); stats['entries_added'] += len(add)
     k = bisect.bisect(plats, 14)
     tt['platforms'].insert(k, 14); tt['offsets'].insert(k, new_offs); tt['compressedLengths'].insert(k, [len(c) for c in comps])
-    tt['decompressedLengths'].insert(k, [len(r) for r in raws]); tt['stageCounts'].insert(k, 2)
+    tt['decompressedLengths'].insert(k, [len(r) for r in raws])
+    if 'stageCounts' in tt: tt['stageCounts'].insert(k, 2)      # absent in Unity 2019.x
     tt['compressedBlob'] = blob + b''.join(comps)
     stats['shaders_patched'] += 1; stats['subprograms_metal'] += len(done)
     return True

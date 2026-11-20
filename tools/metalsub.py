@@ -12,6 +12,10 @@ def split(sp):
     p = 24; nk = struct.unpack_from('<I', sp, p)[0]; p += 4
     for _ in range(nk):
         l = struct.unpack_from('<I', sp, p)[0]; p += 4 + l; p += -p % 4
+    if 201806140 <= ver < 202012090:        # Unity 2019.1-2020.1 blobs carry a second, local-keyword list before the code
+        nl = struct.unpack_from('<I', sp, p)[0]; p += 4
+        for _ in range(nl):
+            l = struct.unpack_from('<I', sp, p)[0]; p += 4 + l; p += -p % 4
     dl = struct.unpack_from('<I', sp, p)[0]
     data = sp[p + 4:p + 4 + dl]; e = p + 4 + dl; e += -e % 4
     return ty, sp[24:p], data, struct.unpack_from('<%dI' % ((len(sp) - e) // 4), sp, e), ver

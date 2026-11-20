@@ -53,7 +53,7 @@ R.E.P.O. is wired up already: `./run.sh` launches the build in `REPO.app/` (not 
 | `tools/inject.py`, `inject_inplace.py`, `metalsub.py` | writes the Metal variants into the game's `Shader` objects |
 | `tools/natives.py` + `*.c`, `repo_tweaks.m` | Steam / Discord / Photon-voice / mouse / warm-up stand-ins |
 | `tools/launch.sh`, `run.sh` | launchers |
-| `docs/` | how it works, porting guide, R.E.P.O. notes |
+| `docs/` | how it works, porting guide, older-Unity path, R.E.P.O. and Outer Wilds notes |
 | `games/` | per-game data (Steam ids, depot manifests = supported versions, status, issues) for R.E.P.O., ULTRAKILL, Lethal Company |
 
 ## Status and versions

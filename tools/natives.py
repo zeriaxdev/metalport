@@ -51,6 +51,30 @@ if a.steam:
         if not m or m.group(2) not in names: print('WARNING cannot shim', s); continue
         user = 'SteamGameServer_GetHSteamUser' if m.group(1) else 'SteamAPI_GetHSteamUser'
         code += f'void* {s}(void) {{ return SteamInternal_FindOrCreateUserInterface({user}(), "{names[m.group(2)]}{m.group(3)}"); }}\n'
+    LEGACY = {      # entry points older Steamworks.NET builds call that newer SDKs dropped
+        'SteamAPI_Init': 'extern _Bool SteamAPI_InitSafe(void);\n_Bool SteamAPI_Init(void) { return SteamAPI_InitSafe(); }\n',
+        'SteamAPI_ISteamUserStats_RequestCurrentStats': '_Bool SteamAPI_ISteamUserStats_RequestCurrentStats(void* self) { return 1; }\n',   # SDK 1.61+: stats load automatically
+    }
+    for i in ('GameSearch', 'MusicRemote', 'AppList'):     # interfaces later SDKs dropped from the flat API; Steamworks.NET's context init fails on a null one
+        LEGACY[f'SteamAPI_ISteamClient_GetISteam{i}'] = f'void* SteamAPI_ISteamClient_GetISteam{i}(void* self, int user, int pipe, const char* ver) {{ return SteamInternal_FindOrCreateUserInterface(user, ver); }}\n'
+    used = set().union(*(strings(f) for f in glob.glob(f'{M}/*.dll')))
+    if b'SteamAPI_ISteamClient_GetISteamUser' in used and not any(re.fullmatch(rb'SteamAPI_SteamUser_v\d+', s) for s in used):
+        # old Steamworks.NET: SteamClient()->GetISteamX(ver) with its own (older) versions.  The borrowed lib's flat functions assume ITS
+        # vtable layouts, so hand out its client and its interface versions (matched by name prefix) instead of the requested ones.
+        vers = sorted({s.decode() for s in strings(lib) if re.fullmatch(rb'(STEAM\w+?_(INTERFACE_)?V(ERSION)?_?|Steam[A-Za-z]+)\d{3}', s)})
+        client = max(v for v in vers if v.startswith('SteamClient'))
+        code += 'extern void* SteamInternal_CreateInterface(const char*);\n#include <string.h>\n#include <ctype.h>\n'
+        code += 'static const char* V[] = {' + ','.join(f'"{v}"' for v in vers) + '};\n'
+        code += ('static const char* pick(const char* want) { size_t n = strlen(want); while (n && isdigit((unsigned char)want[n-1])) n--;\n'
+                 '  for (unsigned i = 0; i < sizeof V / sizeof *V; i++) if (strlen(V[i]) == n + 3 && !strncmp(V[i], want, n)) return V[i]; return want; }\n'
+                 f'void* SteamClient(void) {{ return SteamInternal_CreateInterface("{client}"); }}\n')
+        for x in ('User', 'Friends', 'Apps', 'UGC', 'UserStats', 'Video', 'RemotePlay', 'Matchmaking', 'MatchmakingServers', 'Networking', 'RemoteStorage',
+                  'Screenshots', 'HTTP', 'Music', 'HTMLSurface', 'Inventory', 'ParentalSettings', 'Input', 'Parties', 'Controller'):
+            LEGACY[f'SteamAPI_ISteamClient_GetISteam{x}'] = f'void* SteamAPI_ISteamClient_GetISteam{x}(void* self, int user, int pipe, const char* ver) {{ return SteamInternal_FindOrCreateUserInterface(user, pick(ver)); }}\n'
+        e = e - set(LEGACY)                                  # override the lib's own versions of these getters
+        LEGACY['SteamClient'] = ''; e.discard('SteamClient')
+    for s, c in LEGACY.items():
+        if s.encode() in used and s not in e: code += c; missing.append(s)
     base = f'{P}/libsteam_api_base.dylib'; run('lipo', lib, '-thin', 'arm64', '-output', base); subprocess.run(['install_name_tool', '-id', '@loader_path/libsteam_api_base.dylib', base], capture_output=True); sign(base)
     open('/tmp/steamshim.c', 'w').write(code); cc('/tmp/steamshim.c', f'{P}/libsteam_api.dylib', base, f'-Wl,-reexport_library,{base}'); sign(f'{P}/libsteam_api.dylib')
     dllmap('steam_api64', 'libsteam_api.dylib'); print(f'steam ok (base lib: {os.path.basename(os.path.dirname(lib))}, shimmed {len(missing)} symbols)')
