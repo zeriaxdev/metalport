@@ -37,7 +37,7 @@ not done. ⛔ **Out of scope**: outside this toolkit's data/managed-IL approach.
 |---|---|---|
 | Native arm64 `.app` (player, .NET class libraries, data clone) | ✅ Works | Uses `cp -c` clones where supported; output still needs space for patched files, caches and metadata. |
 | Steam init and overlay | ✅ Works | Uses the local Steam API/client with compatibility shims; coverage depends on the game's wrapper/API version. |
-| Steam lobbies, invites and networking | ◐ Partial | Integration exists; R.E.P.O.'s notes do not record a verified friend invite/join test. |
+| Steam lobbies, invites and networking | ◐ Partial | R.E.P.O.: hosting an online game works (Steam auth ticket accepted, Photon room joined, 2026-11-21); joining a friend / invites not yet tested. |
 | Voice chat (Photon Voice + Opus) | ◐ Partial | Opus tested in isolation; R.E.P.O. voice has not been verified in a real room. Echo cancellation is a pass-through. |
 | Discord SDK | ◐ Partial | No-op stand-in: the game runs, Discord features are off. |
 | Double-click launcher with Steam checks | ✅ Works | Dialogs for "Steam not running" and "Steam couldn't confirm ownership". |
