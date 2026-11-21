@@ -66,7 +66,6 @@ Details per game: [games/](../games).
 | Outer Wilds | Unity 2019.4 on the 2021.3 player | ◐ Playable with issues | depot 753641, manifest 2759471679100125861 | Giant's Deep surface renders black from afar. |
 | ULTRAKILL | Unity 2022.3, Mono | ◐ In progress | depot 1229491, manifest 22957324 | Menu and tutorial work; campaign not verified; compute effects off. |
 | Lethal Company | Unity 2022.3, HDRP | ❌ Blocked | | Needs HDRP support. |
-| Five Nights at Freddy's 1–4, Sister Location, Pizzeria Simulator | Clickteam Fusion 2.5 | ◐ Separate path | | Packaged around a user-built KlikCore2 runtime (`make_fusion_app.py`); FNAF 1 verified. |
 
 ## Roadmap (not started)
 
