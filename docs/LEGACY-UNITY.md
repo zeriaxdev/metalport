@@ -56,10 +56,10 @@ memory profiler and shows a watermark.
 
 * `tools/legacy/validate_typetrees.py <Data> [name,...]`: reads every object with its type tree; lists types that fail.
 * `ilfix il <dll> <Type> [method]` prints IL; `ilfix calls <dll> <member>` lists callers (e.g. who sets `vSyncCount`).
-* `repo_tweaks` (injected by `launch.sh`):
-  * `REPO_NO_ACTIVATE=1`: start behind other windows and keep rendering while covered/unfocused (screenshots without
+* `metalport_tweaks` (injected by `launch.sh`):
+  * `MP_NO_ACTIVATE=1`: start behind other windows and keep rendering while covered/unfocused (screenshots without
     taking focus; pair with `DIAG_MODE=bg`).
-  * `REPO_INVOKE="UnityCompat:UnityCompat.Diag:Run"`: calls `UnityCompat.Diag.Run()` in the game every 10 s.
+  * `MP_INVOKE="UnityCompat:UnityCompat.Diag:Run"`: calls `UnityCompat.Diag.Run()` in the game every 10 s.
 * `UnityCompat.Diag` (`DIAG_MODE`, comma list): `bg` (runInBackground), `fps` (log FPS + pacing settings), `game`
   (Outer Wilds: skip the menu into the world), `sweep` (Outer Wilds: step AO/shadow settings 30 s each), `big`, `probe`,
   `uberinfo`, `cbtest`, `blittest`, `nofx`/`nopp`/`nofog`/`noeye`. `DIAG_PICK_FILE=<f>`: write `x y` (viewport 0–1) into

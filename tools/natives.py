@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Install macOS stand-ins for the Windows-only native plugins a Unity game ships (the game's x86_64 .dll files cannot load).
 usage: natives.py --app <App>.app [--tweaks] [--steam] [--discord] [--voice]      (then re-sign the app)
-  --tweaks   repo_tweaks.dylib: mouse scale, App Nap off, first-run shader warm-up (injected by launch.sh)
+  --tweaks   metalport_tweaks.dylib: mouse scale, App Nap off, first-run shader warm-up (injected by launch.sh)
   --steam    arm64 libsteam_api (borrowed from any installed Steam game) + a shim adding newer flat-API calls; maps steam_api64
   --discord  no-op libdiscord_partner_sdk stand-in (the game stops throwing DllNotFound every frame)
   --voice    Photon Voice: stock libopus as opus_egpv + pass-through WebRTC/AudioIn stubs (needs `brew install opus`)"""
@@ -19,7 +19,7 @@ def strings(path): return set(re.findall(rb'[A-Za-z0-9_\-]{5,}', open(path, 'rb'
 def exports(lib): return set(subprocess.run(['nm', '-gU', lib], capture_output=True, text=True).stdout.split()[2::3])
 
 if a.tweaks:
-    out = f'{P}/repo_tweaks.dylib'; run('clang', '-dynamiclib', '-arch', 'arm64', '-fobjc-arc', '-framework', 'Cocoa', '-framework', 'ApplicationServices', f'{here}/repo_tweaks.m', '-o', out); sign(out); print('tweaks ok')
+    out = f'{P}/metalport_tweaks.dylib'; run('clang', '-dynamiclib', '-arch', 'arm64', '-fobjc-arc', '-framework', 'Cocoa', '-framework', 'ApplicationServices', f'{here}/tweaks.m', '-o', out); sign(out); print('tweaks ok')
 if a.discord:
     syms = sorted({s.decode() for s in strings(f'{M}/Discord.Sdk.dll') if s.startswith(b'Discord_')})
     open('/tmp/discord_stub.c', 'w').write(''.join(f'long {s}(void) {{ return 0; }}\n' for s in syms)); out = f'{P}/libdiscord_stub.dylib'

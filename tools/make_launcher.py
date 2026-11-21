@@ -4,7 +4,7 @@ tools/launch.sh does (Metal HUD, tweaks + Steam overlay injection, Steam app id,
   * Steam not running -> dialog, start Steam, wait for sign-in;
   * the game quits because Steam could not confirm ownership -> dialog saying so.
 Metal HUD is off; Steam Launch Options `-hud` (or HUD=1 in the environment) turns it on.  Environment set by the caller wins
-(tests can pass REPO_NO_ACTIVATE etc.; NO_OVERLAY=1 still works).
+(tests can pass MP_NO_ACTIVATE etc.; NO_OVERLAY=1 still works).
 usage: make_launcher.py <App.app> --appid <steam app id> [--title "Display Name"]   then re-sign the app."""
 import argparse, os, plistlib, stat
 ap = argparse.ArgumentParser(); ap.add_argument('app'); ap.add_argument('--appid', required=True); ap.add_argument('--title'); a = ap.parse_args()
@@ -25,22 +25,22 @@ fi
 export SteamAppId=$APPID SteamGameId=$APPID SteamOverlayGameId=$APPID SteamMetalHook=1
 args=(); for a in "$@"; do [[ "$a" == -hud || "$a" == HUD=1 ]] && HUD=1 || args+=("$a"); done; set -- "${args[@]}"   # Steam Launch Options: -hud
 [[ -n "$HUD" ]] && export MTL_HUD_ENABLED=1
-export REPO_MOUSE_SCALE=${REPO_MOUSE_SCALE:-2.5}
-INJ="$C/Plugins/repo_tweaks.dylib"; [[ -f "$INJ" ]] || INJ=""
+export MP_MOUSE_SCALE=${MP_MOUSE_SCALE:-2.5}
+INJ="$C/Plugins/metalport_tweaks.dylib"; [[ -f "$INJ" ]] || INJ=""
 OVL="$HOME/Library/Application Support/Steam/Steam.AppBundle/Steam/Contents/MacOS/gameoverlayrenderer.dylib"
 [[ -z "$NO_OVERLAY" && -f "$OVL" ]] && INJ="${INJ:+$INJ:}$OVL"
 [[ -n "$INJ" ]] && export DYLD_INSERT_LIBRARIES="$INJ"
-LOGDIR="$HOME/Library/Logs/MacPorts-Unity"; mkdir -p "$LOGDIR"; export REPO_LOG="${REPO_LOG:-$LOGDIR/$EXE.log}"
-[[ -f "$REPO_LOG" ]] && mv -f "$REPO_LOG" "${REPO_LOG%.log}.prev.log"
-export OPUS_SHIM_LOG="${REPO_LOG%.log}.opus.log"
-MARK="$HOME/Library/Application Support/MacPorts-Unity/$EXE-warmup-v1.done"
-[[ "${WARMUP:-auto}" == "1" || ( "${WARMUP:-auto}" == "auto" && ! -f "$MARK" ) ]] && export REPO_WARMUP=1 REPO_WARMUP_MARK="$MARK"
+LOGDIR="$HOME/Library/Logs/metalport"; mkdir -p "$LOGDIR"; export MP_LOG="${MP_LOG:-$LOGDIR/$EXE.log}"
+[[ -f "$MP_LOG" ]] && mv -f "$MP_LOG" "${MP_LOG%.log}.prev.log"
+export OPUS_SHIM_LOG="${MP_LOG%.log}.opus.log"
+MARK="$HOME/Library/Application Support/metalport/$EXE-warmup-v1.done"
+[[ "${WARMUP:-auto}" == "1" || ( "${WARMUP:-auto}" == "auto" && ! -f "$MARK" ) ]] && export MP_WARMUP=1 MP_WARMUP_MARK="$MARK"
 start=$SECONDS; me=$$
 ( while kill -0 $me 2>/dev/null; do sleep 1; done                      # after the game exits: was it a Steam ownership/sign-in failure?
-  if (( SECONDS - start < 180 )) && grep -qE 'Steam not initialized|SteamAPI_Init\(\) failed|SteamApi_Init failed|Steamworks failed' "$REPO_LOG" 2>/dev/null; then
+  if (( SECONDS - start < 180 )) && grep -qE 'Steam not initialized|SteamAPI_Init\(\) failed|SteamApi_Init failed|Steamworks failed' "$MP_LOG" 2>/dev/null; then
     say "Steam couldn't confirm that the signed-in account owns $TITLE (Steam app $APPID). Sign in to Steam with the account that bought it, then try again." '"OK"' >/dev/null
   fi ) &!
-exec "$C/MacOS/$EXE" -logfile "$REPO_LOG" "$@"
+exec "$C/MacOS/$EXE" -logfile "$MP_LOG" "$@"
 '''.replace('@EXE@', exe).replace('@APPID@', a.appid).replace('@TITLE@', title.replace('"', ''))
 p = os.path.join(C, 'MacOS', 'launch'); open(p, 'w').write(script); os.chmod(p, os.stat(p).st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 pl['CFBundleExecutable'] = 'launch'; pl['UnityPlayerExecutable'] = exe

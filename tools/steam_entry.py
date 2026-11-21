@@ -59,7 +59,7 @@ def paths(steam: Path = STEAM) -> dict:
         "manifest": steam / f"steamapps/appmanifest_{APP_ID}.acf",
         "folder": steam / "steamapps/common" / FOLDER_NAME,
         # Not in Caches: users are told they may delete that folder.
-        "receipt": steam.parent / f"MacPorts-Unity/steam-entry-{APP_ID}.json",
+        "receipt": steam.parent / f"metalport/steam-entry-{APP_ID}.json",
     }
 
 

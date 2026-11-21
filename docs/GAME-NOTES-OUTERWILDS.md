@@ -8,7 +8,7 @@
 * **Performance** (M5, Very High AO + shadows, Wake Up prompt): 36–40 fps at 3024×1898, 48 fps at 1512×982; the Windows build
   under CrossOver/D3DMetal does 31 fps at 1512×982. GPU-bound; shadow-map vertex work (resolution-independent) is the largest
   cost, then AO. Shadows Medium + AO Off ≈ 63 fps at 3024×1898. Vsync off changes nothing.
-* The game pauses when unfocused (`runInBackground` false); test hidden with `REPO_NO_ACTIVATE=1` + `DIAG_MODE=bg`.
+* The game pauses when unfocused (`runInBackground` false); test hidden with `MP_NO_ACTIVATE=1` + `DIAG_MODE=bg`.
 * Saves: `~/Library/Application Support/local.port.outerwilds/` (same JSON format as Windows `LocalLow/Mobius Digital/Outer Wilds`).
 * The Windows `OuterWilds.exe` has the Steam DRM wrapper: a CrossOver comparison needs it launched by a signed-in Windows Steam.
 

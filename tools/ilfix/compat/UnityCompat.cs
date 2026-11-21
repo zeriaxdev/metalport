@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace UnityCompat
 {
-    // Debug aid, run via repo_tweaks: REPO_INVOKE="UnityCompat:UnityCompat.Diag:Run" (DIAG_MODE=nofx also disables image effects).
+    // Debug aid, run via metalport_tweaks: MP_INVOKE="UnityCompat:UnityCompat.Diag:Run" (DIAG_MODE=nofx also disables image effects).
     public static class Diag
     {
         static System.Collections.Generic.List<(object, System.Reflection.PropertyInfo, string)> models; static int step;

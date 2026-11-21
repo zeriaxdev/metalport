@@ -30,7 +30,7 @@ List: `ls <Data>/Plugins/x86_64`. For each, find the P/Invoke library *name* the
 * To get exact signatures of P/Invoke functions (needed to write shims), parse the managed assembly metadata with `dnfile` (ImplMap table); the decoder used for Photon is described in PIPELINE.md.
 
 ## 4. Debug loop
-Always launch with a log: `REPO_LOG=/tmp/game.log tools/launch.sh <dir> <App> <appid>`.
+Always launch with a log: `MP_LOG=/tmp/game.log tools/launch.sh <dir> <App> <appid>`.
 | Symptom in the log | Cause / fix |
 |---|---|
 | `Forced GfxDevice 'Metal' was not built from editor` | `patch_buildsettings.py` didn't run / m_GraphicsAPIs not last field |
@@ -50,7 +50,7 @@ Testing without taking over the screen, live toggles, FPS logging, GPU tracing: 
 
 ## 5. Things you will probably still hit
 * **AssetBundles with shaders** (Addressables / `StreamingAssets`): run `tools/patch_bundles.py <bundle>...` from `tools/` (contributed by the Codex session that ported ULTRAKILL: patches each serialized file inside a UnityFS bundle with the same append technique, re-packs with LZ4, and asserts every non-shader object is byte-identical). It also accepts loose serialized files.
-* **Input:** mouse deltas are small → `REPO_MOUSE_SCALE`; keyboard layout switching can spam the log.
+* **Input:** mouse deltas are small → `MP_MOUSE_SCALE`; keyboard layout switching can spam the log.
 * **Window titles / Win32 calls** (`user32.dll FindWindow`) throw once per call; harmless unless the game depends on them.
 * **Performance:** the player runs at the display's native resolution and refresh (ProMotion 120 Hz) → cap frame rate or lower resolution in-game if the laptop runs hot.
 
