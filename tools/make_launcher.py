@@ -43,7 +43,7 @@ start=$SECONDS; me=$$
 exec "$C/MacOS/$EXE" -logfile "$MP_LOG" "$@"
 '''.replace('@EXE@', exe).replace('@APPID@', a.appid).replace('@TITLE@', title.replace('"', ''))
 p = os.path.join(C, 'MacOS', 'launch'); open(p, 'w').write(script); os.chmod(p, os.stat(p).st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-pl['CFBundleExecutable'] = 'launch'; pl['UnityPlayerExecutable'] = exe
+pl['CFBundleExecutable'] = 'launch'; pl['UnityPlayerExecutable'] = exe; pl['MetalportSteamAppID'] = a.appid   # read by tools/steam-play
 if a.title: pl['CFBundleName'] = pl['CFBundleDisplayName'] = a.title
 plistlib.dump(pl, open(info, 'wb'))
 print(f'{a.app}: double-click launcher installed (game binary {exe}, Steam app {a.appid}); re-sign the app')

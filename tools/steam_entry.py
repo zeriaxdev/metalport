@@ -383,10 +383,19 @@ def status(steam: Path = STEAM) -> str:
     return "off"
 
 
+def steam_name(appid: int, steam: Path = STEAM) -> str:
+    """The game's name as Steam's app cache has it (needed so the Mac entry matches Steam's record)."""
+    _, strings, records = read_cache(steam / "appcache/appinfo.vdf")[:3]
+    raw = next((r for a, r in records if a == appid), None)
+    if raw is None:
+        raise SteamEntryError(f"Steam has no data for app {appid} yet. Open its page in Steam once, quit Steam, then try again")
+    return parse(raw[68:], strings)["appinfo"][1]["common"][1]["name"][1]
+
+
 def main(argv: list) -> int:
     import argparse
-    ap = argparse.ArgumentParser(); ap.add_argument("--appid", type=int, required=True); ap.add_argument("--name", required=True); ap.add_argument("--exe", default=""); ap.add_argument("--args", default="", help="launch arguments Steam passes to the app"); ap.add_argument("--cloud", action="store_true", help="also map Steam Cloud saves to ~/Library/Application Support/<bundle id>")
-    ap.add_argument("rest", nargs="*"); a = ap.parse_args(argv[1:]); configure(a.appid, a.name, a.exe, a.args); globals()["CLOUD"] = a.cloud; argv = [argv[0]] + a.rest
+    ap = argparse.ArgumentParser(); ap.add_argument("--appid", type=int, required=True); ap.add_argument("--name", default="", help="Steam's name for the game (default: read from Steam's cache)"); ap.add_argument("--exe", default=""); ap.add_argument("--args", default="", help="launch arguments Steam passes to the app"); ap.add_argument("--cloud", action="store_true", help="also map Steam Cloud saves to ~/Library/Application Support/<bundle id>")
+    ap.add_argument("rest", nargs="*"); a = ap.parse_args(argv[1:]); configure(a.appid, a.name or steam_name(a.appid), a.exe, a.args); globals()["CLOUD"] = a.cloud; argv = [argv[0]] + a.rest
     command = argv[1] if len(argv) > 1 else "status"
     try:
         if command == "add":

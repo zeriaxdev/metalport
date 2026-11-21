@@ -1,0 +1,15 @@
+#!/bin/zsh
+# steam-play <Game.app> [remove]: Steam's own library entry for the game gets a green Play button that starts this Mac app,
+# and Steam Cloud syncs its saves. Quits Steam for a moment (Steam must be closed while its cache is edited), then reopens it.
+# The app must have the metalport launcher (tools/make_launcher.py), which records the Steam app id.
+set -e
+APP="${1:?usage: steam-play <Game.app> [remove]}"; APP="${APP:A}"; HERE="${0:A:h}"
+ID=$(plutil -extract MetalportSteamAppID raw "$APP/Contents/Info.plist" 2>/dev/null) || { echo "No Steam app id in $APP: run tools/make_launcher.py <app> --appid <id> first"; exit 1; }
+if pgrep -x steam_osx >/dev/null; then
+  echo "Quitting Steam for a moment..."; osascript -e 'tell application "Steam" to quit' >/dev/null 2>&1 || true
+  for i in {1..30}; do pgrep -x steam_osx >/dev/null || break; sleep 1; done
+  pgrep -x steam_osx >/dev/null && { echo "Steam didn't quit (is a game running?). Quit it yourself, then run this again."; exit 1; }
+fi
+if [[ "$2" == remove ]]; then python3 "$HERE/steam_entry.py" --appid "$ID" remove
+else python3 "$HERE/steam_entry.py" --appid "$ID" --cloud add "$APP"; fi
+open -g -a Steam && echo "Steam reopened."
