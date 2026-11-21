@@ -1,6 +1,9 @@
 # Changelog
 
 ## 0.6.0 (2026-11-21)
+- Opt-in ULTRAKILL scene comparison (`tests/gameplay`): isolated app/profile copies, natural camera capture, dark/solid-frame rejection,
+  palette compute OFF/ON dispatch checks and measured pixel differences. The targeted M5/Metal run completes with 99.61% identical
+  palette pixels; full campaign and exact parity remain unverified. Installed app/saves are untouched.
 - Project renamed **metalport**. Generic names everywhere: launcher/tweaks settings `REPO_*` are now `MP_*` (`MP_LOG`, `MP_INVOKE`,
   `MP_NO_ACTIVATE`, `MP_MOUSE_SCALE`, `MP_WARMUP`), the tweaks library is `metalport_tweaks.dylib` (`tools/tweaks.m`), logs and support
   files live in `~/Library/Logs/metalport` and `~/Library/Application Support/metalport`. Rebuild existing apps with

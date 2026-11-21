@@ -35,7 +35,7 @@
   "compute": {
     "objects": "PaletteCompute (ComputeLUT), OutlineCompute (CreateMask, JFA, Composite, Composite1PX)",
     "verified_2026_11_21": "all 5 kernels compile; ComputeLUT 512/512, CreateMask 64/64, Composite 64/64 texels match CPU references through Unity 2022.3.29f1's player on Metal (disposable clone, copied profile); JFA/Composite1PX not dispatched",
-    "gameplay": "the game's palette code (ConvertPaletteToLUT.ConvertPalette) dispatches the converted kernel without engine errors; visual parity unverified because the automated Level 0-1 baseline renders nearly black even with compute off; gameplay outlines use shader blits, not OutlineCompute; 2026-11-21: the user confirmed the installed app renders Level 0-1 normally, so the dark baseline is a test-harness problem (camera pose / capture), not a build problem",
-    "next": "fix the automated capture (pose, timing, which camera is read) or compare by hand: a separate copy with the converted palette kernel enabled, played side by side with the installed app, before installing"
+    "gameplay": "2026-11-21: installed Level 0-1 renders normally (user-confirmed). The corrected isolated harness uses the natural camera pose and renders the normal baseline correctly. The game palette method dispatches once with compute ON and zero times OFF, without captured engine errors; 2230/576000 palette pixels differ (99.6128% identical), so pixel-exact parity is not claimed. Normal baseline differs in 4 pixels; restored settings differ in 20. All 17 checked installed-app/save/settings files remain unchanged. Gameplay outlines use shader blits, not OutlineCompute.",
+    "next": "investigate the small palette differences and validate other scenes/palettes before any installed-app update; tests/gameplay/compare.py reproduces the protected comparison from an existing native app and copied profile"
   }
 }

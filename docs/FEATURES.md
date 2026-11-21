@@ -27,7 +27,7 @@ not done. ⛔ **Out of scope**: outside this toolkit's data/managed-IL approach.
 | float3 constant overwrite fix | ✅ Works | Metal writes a float3 as 16 bytes; `cbfix.py` (2020.2+) and `shader2021.py` (2019 data) move the overwritten value. |
 | Post-processing v1 (built-in) | ◐ Partial | Tested in Outer Wilds with eye adaptation disabled; its compute path is unverified. |
 | Post-processing v2 | ◐ Partial | R.E.P.O.'s listed effects work via fragment fallbacks. Color grading remains off because its LUT bakes to a constant on Metal; other games/combinations need testing. |
-| Compute shaders | ◐ Partial | Unity 2021/2022 compute data converts and compiles; on ULTRAKILL three kernels run correctly through Unity's player on Metal (GPU readback matches). Not yet verified visually in gameplay ([details](COMPUTE-SHADERS.md#verification-status-ultrakill-unity-2022329f1-apple-m5-2026-11-21)). |
+| Compute shaders | ◐ Partial | Selected Unity 2021/2022 data converts; three ULTRAKILL kernels pass Unity-player GPU readback. Its palette also renders in a targeted Level 0-1 comparison (99.61% identical pixels vs fallback); full gameplay and exact parity remain unverified ([details](COMPUTE-SHADERS.md#targeted-gameplay-comparison)). |
 | Geometry, hull and domain (tessellation) shaders | ❌ Not yet | Default preflight reports unsupported stages and stops. Incomplete opt-in does not establish a working fallback. |
 | Vulkan-only (SPIR-V) shader variants | ❌ Not yet | Only D3D11 bytecode is translated. |
 
@@ -65,7 +65,7 @@ Details per game: [games/](../games).
 |---|---|---|---|---|
 | R.E.P.O. | Unity 6000.3, Mono | ✅ Playable | depot 3241661, manifest 4238581831212146714 (v0.5.2) | Color grading off. |
 | Outer Wilds | Unity 2019.4 on the 2021.3 player | ◐ Playable with issues | depot 753641, manifest 2759471679100125861 | Giant's Deep surface renders black from afar. |
-| ULTRAKILL | Unity 2022.3, Mono | ◐ In progress | depot 1229491, manifest 22957324 | Menu and tutorial work; campaign not verified; the installed build still has its compute effects off (converted palette kernel passes in Unity, not yet installed). |
+| ULTRAKILL | Unity 2022.3, Mono | ◐ In progress | depot 1229491, manifest 22957324 | Installed Level 0-1 renders normally (user-confirmed). Palette compute tested in an isolated scene comparison; installed build keeps its fallback. Full campaign and exact palette parity remain unverified. |
 | Lethal Company | Unity 2022.3, HDRP | ❌ Blocked | | Needs HDRP support. |
 
 ## Roadmap (not started)

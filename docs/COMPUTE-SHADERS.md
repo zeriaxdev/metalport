@@ -50,11 +50,31 @@ Tested GPU operations: 512 palette-LUT texels, 64 mask texels and 64 composite t
 | Translates and compiles with Metal | ✅ | ✅ | ✅ | ✅ |
 | Direct Metal dispatch, GPU readback vs CPU reference | ✅ 512/512 texels | ✅ 64/64 | ✅ 64/64 (±1e-6) | not tested |
 | Through Unity's player (AssetBundle load, kernel bindings, constants, dispatch, readback) | ✅ 512/512 | ✅ 64/64 | ✅ 64/64 | kernels found, not dispatched |
-| In gameplay | ◐ the game's palette code dispatches the converted kernel without engine errors; visual result **not verified** | not used by gameplay | not used by gameplay | not used by gameplay |
+| Targeted in-game scene render | ✅ Level 0-1 synthetic palette comparison completes; 99.61% identical pixels vs fragment fallback, not pixel-exact parity | not used by the inspected gameplay path | not used by the inspected gameplay path | not used by the inspected gameplay path |
 
-Notes: the Unity-player test ran in a disposable clone of the app with a copied profile; the installed app and saves were checked unchanged
-by hash. ULTRAKILL's gameplay outlines use regular shader blits (`PostProcessV2_Handler.SetupOutlines`), not `OutlineCompute`. The
-gameplay comparison is blocked: its automated test scene renders nearly black even with compute off, so the baseline is not yet
-trustworthy.
+Notes: tests run in disposable app clones with copied profiles; the installed app and saves were checked unchanged by hash.
+ULTRAKILL's inspected gameplay outlines use regular shader blits (`PostProcessV2_Handler.SetupOutlines`), not `OutlineCompute`.
+
+### Targeted gameplay comparison
+
+The installed game renders Level 0-1 normally (user-confirmed). The earlier nearly black automated baseline was a harness error:
+it forced an old spawn coordinate `(0, 0.9, 253)` instead of the actual camera pose `(39.7, 0.9, 343.7)`. The corrected probe uses
+the game's post-processing singleton and natural camera, explicitly renders that camera in batch mode, and rejects both dark and solid-color baselines.
+
+The saved [opt-in harness](../tests/gameplay/README.md) was run end to end on Unity 2022.3.29f1, Apple M5, Metal, with .NET SDK 11.
+Both modes start through Main Menu → Level 0-1 using the same copied profile snapshot. The game's palette method dispatches once
+with compute ON and zero times with it OFF; each retains its lighting buffer and produces no captured engine errors. Color precision
+is restored after the synthetic palette test.
+
+| Capture | Pixels different (of 576,000) | Identical pixels | Mean absolute RGB error (0–255) |
+|---|---:|---:|---:|
+| Normal baseline | 4 | 99.9993% | 0.0000185 |
+| Synthetic palette | 2,230 | 99.6128% | 0.149699 |
+| Palette removed / settings restored | 20 | 99.9965% | 0.0000926 |
+
+The palette result is visually close but not pixel-exact; the cause of the remaining differences has not been established. The probe
+captures a 960×600 final image and a 640×480 internal scene target in this test configuration. These are controlled scene captures,
+not an interactive campaign test or performance benchmark. All 17 checked installed-app/save/settings files remained unchanged.
+No compute update was installed. Other scenes, palettes, game versions and the unused outline kernels still need separate validation.
 
 Full gameplay through Unity's player, arbitrary HDRP/VFX pipelines, native audio, Steam networking and other games' compute kernels are not implied by these tests. The compute components adapt MIT-licensed code from wisnuub/ror2-silicon-macos; see `tools/shaderconv-LICENSE.txt`.
