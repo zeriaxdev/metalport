@@ -162,6 +162,18 @@ namespace UnityCompat
                             var pe = model.GetType().GetProperty("enabled", F); var was = pe?.GetValue(model); pe?.SetValue(model, w[2] == "1");
                             Debug.Log($"[diag] ppv1 {b.name}/{w[1]} {was} -> {w[2]}");
                         }
+                    if (w[0] == "find")                                             // find <root name part>: renderers under matching roots that are on screen now
+                    {
+                        var fcam = Camera.main; int n = 0; var seenFind = new System.Collections.Generic.HashSet<string>();
+                        foreach (var r in Object.FindObjectsOfType<Renderer>())
+                        {
+                            if (!r.enabled || !r.isVisible || !(r.transform.root.name.Contains(w[1]) || r.name.Contains(w[1]))) continue;
+                            var m = r.sharedMaterial; var key = (m && m.shader ? m.shader.name : "-") + (m ? m.name : "");
+                            if (!seenFind.Add(key)) continue; n++;
+                            Debug.Log($"[diag] find {r.transform.root.name}/{r.transform.parent?.name}/{r.name} mat={(m ? m.name : "-")} dist={(r.bounds.center - fcam.transform.position).magnitude:F0} shader={(m && m.shader ? m.shader.name : "-")} kw={(m ? string.Join(" ", m.shaderKeywords) : "")} q={(m ? m.renderQueue : 0)}");
+                        }
+                        Debug.Log($"[diag] find {w[1]}: {n} visible");
+                    }
                     if (w[0] == "res") Screen.SetResolution(int.Parse(w[1]), int.Parse(w[2]), Screen.fullScreenMode);
                     if (w[0] == "shadows") QualitySettings.shadows = w[1] == "0" ? ShadowQuality.Disable : ShadowQuality.All;
                     if (w[0] == "comp") foreach (var b in Object.FindObjectsOfType<MonoBehaviour>()) if (b.GetType().Name == w[1]) b.enabled = w[2] == "1";
