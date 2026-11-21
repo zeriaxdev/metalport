@@ -1,0 +1,202 @@
+#!/usr/bin/env python3
+"""metalport: port a Windows Unity (Mono) game to a native Apple Silicon app in one command.
+
+usage:
+  metalport port <steam app id | game folder> [--name NAME] [--appid ID] [--steam-play] [--mods]
+                 [--allow-incomplete] [--replace] [-v]
+
+Steps: find the game, go/no-go check, fetch the matching Unity Mac player, translate + inject shaders, native stand-ins
+(Steam/Discord/voice), launcher + signing, optional Steam Play button/Cloud and BepInEx mods.
+Output: ports/<Name>/<Name>.app (+ shader reports). Every run writes a full log and a JSON summary to ~/Library/Logs/metalport/.
+-v streams every tool's output; otherwise output is shown only for a failing step. NO_COLOR=1 disables colour.
+"""
+import argparse, json, os, re, subprocess, sys, threading, time
+ANSI = re.compile(r'\x1b\[[0-9;]*m')
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+TOOLS = ROOT / 'tools'
+STEAM = Path.home() / 'Library/Application Support/Steam'
+LOGDIR = Path.home() / 'Library/Logs/metalport'
+TTY = sys.stdout.isatty() and not os.environ.get('NO_COLOR')
+def c(code, s): return f'\033[{code}m{s}\033[0m' if TTY else s
+OK, BAD, WARN, DIM = (lambda s: c('32', s)), (lambda s: c('31', s)), (lambda s: c('33', s)), (lambda s: c('2', s))
+
+
+class Fail(Exception): pass
+
+
+class Run:
+    """Runs the steps: one status line each, a full log, and a JSON summary."""
+    def __init__(self, slug, verbose):
+        LOGDIR.mkdir(parents=True, exist_ok=True)
+        base = LOGDIR / f'port-{slug}-{time.strftime("%Y%m%d-%H%M%S")}'
+        self.log_path, self.json_path = base.with_suffix('.log'), base.with_suffix('.json')
+        self.log = open(self.log_path, 'w'); self.verbose = verbose; self.tail = []
+        self.summary = {'game': slug, 'started': time.strftime('%Y-%m-%d %H:%M:%S'), 'steps': [], 'result': 'running'}
+        self.n = 0; self.total = 0
+
+    def write(self, line): self.log.write(line); self.log.flush()
+
+    def step(self, label, fn):
+        """fn(run) does the work and returns a short detail string; raise Fail(detail) to stop."""
+        self.n += 1; t0 = time.time(); self.tail = []
+        head = f'[{self.n}/{self.total}] {label}'
+        self.write(f'\n===== {head} =====\n')
+        done = threading.Event()
+        def spin():
+            frames = '⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'; i = 0
+            while not done.wait(0.12):
+                print(f'\r  {frames[i % len(frames)]} {head}  {DIM(f"{time.time() - t0:4.0f}s")}', end='', flush=True); i += 1
+        spinner = threading.Thread(target=spin, daemon=True) if TTY and not self.verbose else None
+        if not spinner: print(f'  … {head}', flush=True)
+        if spinner: spinner.start()
+        status, detail = 'ok', ''
+        try: detail = fn(self) or ''
+        except Fail as e: status, detail = 'failed', str(e)
+        finally:
+            done.set()
+            if spinner: spinner.join()
+        secs = time.time() - t0
+        mark = OK('✓') if status == 'ok' else BAD('✗')
+        print(('\r\033[K' if TTY else '') + f'  {mark} {head}  {DIM(f"{secs:.0f}s")}  {detail}', flush=True)
+        self.summary['steps'].append({'step': label, 'status': status, 'seconds': round(secs, 1), 'detail': ANSI.sub('', detail)})
+        self.write(f'----- {status} ({secs:.1f}s) {ANSI.sub("", detail)}\n')
+        if status == 'failed':
+            if not self.verbose and self.tail:
+                print(DIM('    last output:'))
+                for l in self.tail[-15:]: print(DIM('    ' + l.rstrip()[:160]))
+            self.finish('failed'); sys.exit(1)
+
+    def sh(self, *cmd, env=None, cwd=None):
+        """Run a command; output goes to the log (and the terminal with -v). Returns (returncode, full output)."""
+        self.write('$ ' + ' '.join(map(str, cmd)) + '\n')
+        p = subprocess.Popen([str(x) for x in cmd], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors='replace',
+                             env={**os.environ, **(env or {})}, cwd=cwd)
+        out = []
+        for line in p.stdout:
+            out.append(line); self.write(line); self.tail = (self.tail + [line])[-40:]
+            if self.verbose: print(DIM('    ' + line.rstrip()), flush=True)
+        return p.wait(), ''.join(out)
+
+    def must(self, *cmd, what, **kw):
+        rc, out = self.sh(*cmd, **kw)
+        if rc: raise Fail(f'{what} exited {rc}')
+        return out
+
+    def finish(self, result):
+        self.summary['result'] = result; self.summary['finished'] = time.strftime('%Y-%m-%d %H:%M:%S')
+        self.json_path.write_text(json.dumps(self.summary, indent=2) + '\n'); self.log.close()
+        print(f'\n  {"Done" if result == "ok" else "Stopped"}. Log: {self.log_path}\n  Summary: {self.json_path}\n')
+
+
+def python_env(run, args):
+    venv = ROOT / '.venv'; py = venv / 'bin/python'
+    if not py.exists(): run.must(sys.executable, '-m', 'venv', venv, what='python -m venv')
+    if run.sh(py, '-c', 'import UnityPy, lz4, dnfile')[0]:
+        run.must(py, '-m', 'pip', 'install', '-q', '-r', ROOT / 'requirements.txt', what='pip install')
+    run.py = str(py); return '.venv ready'
+
+
+def find_game(run, args):
+    t = Path(args.target).expanduser()
+    if t.is_dir():
+        data = t if t.name.endswith('_Data') else next(iter(sorted(t.glob('*_Data'))), None)
+        if not data: raise Fail(f'no *_Data folder in {t}')
+    elif args.target.isdigit():
+        cands = []
+        for base in (STEAM / 'steamapps/content', STEAM / 'Steam.AppBundle/Steam/Contents/MacOS/steamapps/content'):
+            cands += sorted((base / f'app_{args.target}').glob('depot_*/*_Data'))
+        acf = STEAM / f'steamapps/appmanifest_{args.target}.acf'
+        if acf.exists():
+            m = re.search(r'"installdir"\s+"([^"]+)"', acf.read_text(errors='replace'))
+            if m: cands += sorted((STEAM / 'steamapps/common' / m.group(1)).glob('*_Data'))
+        if not cands:
+            raise Fail(f"not downloaded. In Steam's console (open steam://open/console): download_depot {args.target} {int(args.target) + 1}")
+        data = cands[0]; args.appid = args.appid or args.target
+    else:
+        raise Fail(f'{args.target}: not a folder or a Steam app id')
+    run.data = data; run.name = args.name or data.name[:-len('_Data')]
+    if not args.appid and (data.parent / 'steam_appid.txt').exists(): args.appid = (data.parent / 'steam_appid.txt').read_text().strip()
+    return f'{run.name}  {DIM(str(data.parent))}'
+
+
+def inspect(run, args):
+    out = run.must(run.py, TOOLS / 'inspect_game.py', run.data.parent, what='inspect_game.py')
+    field = lambda k: (re.search(rf'^{k}\s*:\s*(.*)$', out, re.M) or [None, ''])[1].strip()
+    run.unity, backend = field('Unity version'), field('Scripting backend')
+    run.plugins = field('Native plugins').lower()
+    run.summary['inspect'] = {k: field(k) for k in ('Unity version', 'Scripting backend', 'Shaders', 'Compute shaders', 'Render pipeline', 'Native plugins')}
+    if 'IL2CPP' in backend: raise Fail('IL2CPP game: its code is compiled Windows code, which this toolkit cannot port')
+    if not re.match(r'\d+\.\d+', run.unity): raise Fail('could not read the Unity version')
+    major, minor = (int(x) for x in run.unity.split('.')[:2])
+    if (major, minor) < (2020, 2): raise Fail(f'Unity {run.unity} has no Apple Silicon player: see docs/LEGACY-UNITY.md')
+    return f'Unity {run.unity}, {backend}' + (WARN('  HDRP: expect shader gaps') if 'HDRP' in field('Render pipeline') else '')
+
+
+def unity_player(run, args):
+    dest = ROOT / 'work/unity' / run.unity; run.unity_dir = dest
+    if (dest / 'monolibs').is_dir() and list(dest.glob('module/**/Payload/Variations')): return 'cached'
+    run.must(run.py, TOOLS / 'fetch_unity.py', run.unity, dest, what='fetch_unity.py')
+    return f'downloaded to work/unity/{run.unity}'
+
+
+def build(run, args):
+    out = ROOT / 'ports' / run.name; app = out / f'{run.name}.app'
+    if app.exists():
+        if not args.replace: raise Fail(f'{app} exists (--replace moves it to the Trash first)')
+        os.rename(app, Path.home() / '.Trash' / f'{run.name}-{time.strftime("%Y%m%d-%H%M%S")}.app')
+    rc, _ = run.sh(run.py, TOOLS / 'port.py', '--data', run.data, '--unity', run.unity_dir, '--out', out, '--name', run.name,
+                   *(['--allow-incomplete'] if args.allow_incomplete else []), cwd=TOOLS)
+    rep = next((r for r in (out / 'shader-output-coverage.json', out / 'shader-source-coverage.json') if r.exists()), None)
+    data = json.loads(rep.read_text()) if rep else {}
+    issues = len(data.get('issues', []))
+    run.summary['coverage'] = {'counts': data.get('counts'), 'issues': issues, 'complete': data.get('complete'), 'report': str(rep)}
+    if rc: raise Fail(f'{issues} shader issue(s), details in {rep}' + ('' if args.allow_incomplete else '; --allow-incomplete builds anyway'))
+    run.app = app
+    return 'all shaders translated' if not issues else WARN(f'{issues} shader issue(s), built anyway')
+
+
+def natives(run, args):
+    flags = ['--tweaks']
+    if 'steam_api' in run.plugins: flags.append('--steam')
+    if 'discord' in run.plugins: flags.append('--discord')
+    if any(k in run.plugins for k in ('photon', 'opus', 'audioin')): flags.append('--voice')
+    run.must(run.py, TOOLS / 'natives.py', '--app', run.app, *flags, what='natives.py', cwd=TOOLS)
+    return ' '.join(f[2:] for f in flags)
+
+
+def launcher(run, args):
+    if not args.appid: raise Fail('no Steam app id found: pass --appid <id>')
+    run.must(run.py, TOOLS / 'make_launcher.py', run.app, '--appid', args.appid, '--title', run.name, what='make_launcher.py')
+    run.must('codesign', '--force', '--deep', '-s', '-', run.app, what='codesign')
+    return f'Steam app {args.appid}, signed'
+
+
+def main():
+    ap = argparse.ArgumentParser(prog='metalport', description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = ap.add_subparsers(dest='cmd', required=True)
+    p = sub.add_parser('port', help='port a game')
+    p.add_argument('target', help='Steam app id or game folder'); p.add_argument('--name'); p.add_argument('--appid')
+    p.add_argument('--steam-play', action='store_true', help='add the Steam Play button + Steam Cloud (quits and reopens Steam)')
+    p.add_argument('--mods', action='store_true', help='install BepInEx for mods')
+    p.add_argument('--allow-incomplete', action='store_true', help='build even if some shaders could not be translated')
+    p.add_argument('--replace', action='store_true', help='move an existing app to the Trash first')
+    p.add_argument('-v', '--verbose', action='store_true', help="stream every tool's output")
+    args = ap.parse_args()
+    run = Run(re.sub(r'[^A-Za-z0-9]+', '-', Path(args.target).name).strip('-') or 'game', args.verbose)
+    steps = [('Python environment', python_env), ('Find game', find_game), ('Go/no-go check', inspect),
+             ('Unity Mac player', unity_player), ('Translate shaders + build app', build), ('Native stand-ins', natives),
+             ('Launcher + signing', launcher)]
+    if args.steam_play: steps.append(('Steam Play button + Cloud', lambda r, a: r.must(TOOLS / 'steam-play', r.app, what='steam-play') and 'Play button + Steam Cloud'))
+    if args.mods: steps.append(('BepInEx mods', lambda r, a: r.must(TOOLS / 'mods', r.app, 'install', what='mods') and 'BepInEx installed'))
+    run.total = len(steps)
+    print(f'\n  metalport · porting {args.target}\n')
+    for label, fn in steps: run.step(label, lambda r, fn=fn: fn(r, args))
+    print(f'\n  {OK("Ready")}: {run.app}')
+    run.finish('ok')
+
+
+if __name__ == '__main__':
+    try: main()
+    except KeyboardInterrupt: print('\n  interrupted'); sys.exit(130)

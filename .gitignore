@@ -10,3 +10,4 @@ __pycache__/
 .impeccable/
 games/library-candidates.local.md
 work/
+.venv/

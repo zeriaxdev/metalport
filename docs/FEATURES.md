@@ -45,7 +45,7 @@ not done. ⛔ **Out of scope**: outside this toolkit's data/managed-IL approach.
 | Metal HUD on demand | ✅ Works | Steam Launch Options `-hud`, or `HUD=1`. |
 | Steam Cloud for native saves | ✅ Works | Part of `tools/steam-play` (`steam_entry.py --cloud`): adds a macOS root override so Steam syncs `~/Library/Application Support/<bundle id>` with the Windows save folder. Back up saves first: the first sync replaces local files that differ from the cloud. |
 | Mods (BepInEx 5) | ✅ Works | `tools/mods <Game.app> install` (official BepInEx 5.4.23.6 macOS universal build, pinned + checksum); mods go in `~/Library/Application Support/metalport/mods/<bundle id>/BepInEx/plugins`. Verified on R.E.P.O.: plugins load and Harmony patches game code on Apple Silicon. `tools/mods add <Author-Mod>` installs Thunderstore mods with dependencies; [r2modmac](https://github.com/Zard-Studios/r2modmac) works too (its "Apply to Game" target is the Steam install folder; the launcher runs those mods on the fixed core). Not yet: shaders inside mods' own asset bundles (Windows-only, so some modded visuals may not render) and mods that ship Windows-native DLLs. `-nomods` starts without mods. |
-| One-step installer from your own Steam copy | ❌ Not yet | Today: the commands in the README. |
+| One-command port from your own Steam copy | ◐ Partial | `tools/metalport port <app id | folder>`: runs every step with logs and a JSON summary; stops early with a reason. Older-Unity (2019) games still need the manual legacy path. |
 
 ### Tooling
 
@@ -70,6 +70,5 @@ Details per game: [games/](../games).
 
 ## Roadmap (not started)
 
-1. One-step installer: build, install, Play button and cleanup from your own Steam copy.
 2. Post-processing v2 color grading on Metal.
 3. HDRP (Lethal Company).

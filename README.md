@@ -26,7 +26,20 @@ Ported so far: **R.E.P.O.** (playable, ~110-130 fps at 3024x1898 on an Apple M5,
 
 Details and the go/no-go checklist: [docs/PORTING-A-NEW-GAME.md](docs/PORTING-A-NEW-GAME.md).
 
+## One command
+
+```sh
+tools/metalport port <steam app id | game folder> [--steam-play] [--mods] [-v]
+```
+
+Runs every step below (go/no-go check, Unity player download, shader translation + Metal compile checks, native stand-ins,
+launcher, signing; optionally the Steam Play button + Cloud and BepInEx) and writes `ports/<Game>/<Game>.app`. One status line per
+step; `-v` streams all tool output. Each run leaves a full log and a JSON summary in `~/Library/Logs/metalport/`. It stops with a
+plain reason when a game can't be ported (IL2CPP, Unity before 2020.2, shader gaps unless `--allow-incomplete`).
+
 ## Quick start (macOS, Apple Silicon)
+
+The same steps by hand:
 
 ```sh
 # 0. prerequisites: Xcode command line tools, cmake, python3, (brew install opus for voice games)
