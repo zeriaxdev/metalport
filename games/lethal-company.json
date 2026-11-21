@@ -10,9 +10,17 @@
     "download_gb": 0.6
   },
   "supported_versions": "none",
-  "status": "not ported: HDRP-specific passes and end-to-end rendering remain unverified; selected compute conversion exists but is insufficient by itself; the inspected build has 179 D3D11 graphics shaders",
+  "status": "not ported; coverage measured 2026-11-21: 68% of graphics programs translate, 53% compile on Metal; 112 of 122 compute shaders convert",
   "owner": "-",
   "known_issues": [
     "Full HDRP compatibility and gameplay have not been validated with the current compute converter"
-  ]
+  ],
+  "coverage_2026_11_21": {
+    "build": "Unity 2022.3.62f2, Mono, HDRP; depot 1966721 manifest 6423525044216269478; 185 graphics shaders (11,188 unique programs), 122 compute shaders",
+    "graphics": "7,570 / 11,188 programs translate (68%); 5,943 compile with Metal (53%)",
+    "compute": "112 / 122 objects convert (589 kernel variants); 6 kernels are stripped from the build (no variants), 1 VR foveation (Vulkan only), 3 fail to compile (undeclared identifier, duplicate sampler)",
+    "top_causes": "3,368 translation failures are one crash in the HLSLcc translator (h2m exits on a signal), mostly HDRP/Lit, TemporalAA, CloudLayer, LayeredLit; 1,581 Metal compile failures are one codegen bug: texture .read() with an integer LOD emits 'type name requires a specifier or qualifier', mostly HDRP/Lit and FinalPass. Together about 92% of all 5,357 issues.",
+    "plugins": "steam_api64, discord_game_sdk, Dissonance (AudioPluginDissonance + opus), phonon_fmod (Steam Audio), OpenXR (VR only)",
+    "next": "fix the two translator bugs, re-run coverage; above ~95% build with --allow-incomplete and test HDRP at runtime"
+  }
 }

@@ -66,7 +66,7 @@ Details per game: [games/](../games).
 | R.E.P.O. | Unity 6000.3, Mono | ✅ Playable | depot 3241661, manifest 4238581831212146714 (v0.5.2) | Color grading off. |
 | Outer Wilds | Unity 2019.4 on the 2021.3 player | ◐ Playable with issues | depot 753641, manifest 2759471679100125861 | Giant's Deep surface renders black from afar. |
 | ULTRAKILL | Unity 2022.3, Mono | ◐ In progress | depot 1229491, manifest 22957324 | Installed Level 0-1 renders normally (user-confirmed). Palette compute tested in an isolated scene comparison; installed build keeps its fallback. Full campaign and exact palette parity remain unverified. |
-| Lethal Company | Unity 2022.3, HDRP | ❌ Blocked | | Needs HDRP support. |
+| Lethal Company | Unity 2022.3, HDRP | ❌ Not ported | depot 1966721, manifest 6423525044216269478 | Coverage: 68% of shader programs translate, 53% compile on Metal, 112/122 compute shaders convert; two translator bugs cause ~92% of the gaps (see games/lethal-company.json). |
 
 ## Roadmap (not started)
 
