@@ -5,7 +5,7 @@
 Run a **Windows-only Unity game natively on Apple Silicon with Metal** — no Rosetta, no Wine/CrossOver — by wrapping the game's
 existing Windows data in a macOS Unity player and translating its shaders from Direct3D 11 to Metal.
 
-Ported so far: **R.E.P.O.** (playable, ~110-130 fps at 3024x1898 on an Apple M5, Steam overlay, networking and voice) and **Outer Wilds**
+Ported so far: **R.E.P.O.** (playable, ~110-130 fps at 3024x1898 on an Apple M5, Steam overlay; see multiplayer/voice limits in the feature list) and **Outer Wilds**
 (playable with one rendering issue). **What works, what doesn't, and which games are supported: [docs/FEATURES.md](docs/FEATURES.md).**
 
 > **Notice.** This independent project is not affiliated with, endorsed by, or sponsored by Unity Technologies, Valve, Discord, or any game
@@ -19,10 +19,10 @@ Ported so far: **R.E.P.O.** (playable, ~110-130 fps at 3024x1898 on an Apple M5,
 
 | Requirement | Why |
 |---|---|
-| Unity **Mono** build (the game folder has `MonoBleedingEdge/` and `Managed/*.dll`) | IL2CPP games compile to native x86 code; this toolkit only rewrites data |
+| Unity **Mono** build with managed game-code DLLs | This toolkit handles data and managed IL; it does not translate IL2CPP's native Windows game code |
 | Windows build on **Direct3D 11** shaders (typical) | Shaders are translated from DX11 bytecode |
-| **Built-in / URP** style rendering without heavy compute | VS/PS translate well; compute, geometry, tessellation and **HDRP** do not (yet) |
-| Unity version with a macOS Apple-Silicon player (2020.2+; tested on 6000.3) | The player must match the game's exact Unity version |
+| **Built-in / URP** style rendering | Vertex/pixel shaders and selected Unity 2021/2022 compute formats convert; full HDRP, geometry and tessellation remain unsupported. URP gameplay still needs validation |
+| A compatible macOS Apple-Silicon player | Use the exact Unity version for the normal route. Unity 2019.x–2020.1 needs the separate [legacy migration](docs/LEGACY-UNITY.md) |
 
 Details and the go/no-go checklist: [docs/PORTING-A-NEW-GAME.md](docs/PORTING-A-NEW-GAME.md).
 
@@ -39,6 +39,7 @@ python3 -m venv .venv && .venv/bin/pip install UnityPy lz4 dnfile
 .venv/bin/python tools/port.py --data "<path to Game_Data>" --unity work/unity --out work/out --name Game
 
 # 3. native stand-ins for Windows-only plugins, then sign
+# Select the flags your game needs; --discord and --voice are additional per-game integrations.
 .venv/bin/python tools/natives.py --app work/out/Game.app --tweaks --steam
 codesign --force --deep -s - work/out/Game.app
 
@@ -52,7 +53,8 @@ tools/steam-play work/out/Game.app
 tools/mods work/out/Game.app install
 ```
 
-Built apps live in `ports/` (git-ignored), e.g. `ports/R.E.P.O.app`: open them like any app, or with Steam's Play button (`tools/steam_entry.py`).
+The example writes `work/out/Game.app`; `--out` controls the location. Local tested ports are kept under `ports/` (git-ignored), e.g. `ports/R.E.P.O.app`.
+Default preflight stops on unsupported or failed shader variants. Explicit incomplete experiments remain unverified for rendering; see [SHADER-CHECKS.md](docs/SHADER-CHECKS.md).
 
 ## Layout
 

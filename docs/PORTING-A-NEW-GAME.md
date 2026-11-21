@@ -9,10 +9,11 @@ Download the Windows build (Steam Mac can't install Windows-only games; use the 
 ```
 | Report line | Meaning |
 |---|---|
-| Scripting backend: **IL2CPP** | stop — game logic is compiled x86 (needs a different approach) |
+| Scripting backend: **IL2CPP** | stop — game logic is native Windows code (needs a different approach) |
 | Render pipeline: **HDRP** | full-pipeline compatibility is unverified; selected compute formats now convert, which alone is insufficient |
 | Shaders: only `D3D11` + 6 internal ones | expected; the toolkit adds Metal |
-| Shaders: `OpenGLCore`/`Vulkan` for all | even easier: an x64 player + `-force-glcore` may already run (see Frown/UltraNix for ULTRAKILL) but not on arm64 |
+| Shaders: `OpenGLCore` variants present | An Intel-compatible player/OpenGL experiment is a separate route; it does not establish native arm64 Metal compatibility |
+| Shaders: only `Vulkan` / SPIR-V input | This toolkit has no SPIR-V input backend; Vulkan variants are not OpenGLCore programs |
 | Native plugins | each is a work item (see §3) |
 | Addressables | path fix is automatic; bundles may contain more shaders (see §4) |
 
@@ -26,7 +27,7 @@ See the README quick start. Use a fresh output folder: `tools/port.py` refuses a
 List: `ls <Data>/Plugins/x86_64`. For each, find the P/Invoke library *name* the managed code uses (`strings <Data>/Managed/*.dll | grep -i <name>`), then decide:
 * Steamworks → `natives.py --steam`.
 * A library with an open-source macOS build (Opus, SQLite, FMOD wrappers…) → map it with a `dllmap` entry to a macOS build.
-* Closed SDK without macOS build (Discord Social SDK, anti-cheat) → write a no-op stub (see `discord` in `natives.py`); the game usually tolerates it.
+* Optional integrations the game tolerates without the service can use an explicit disabled/no-op implementation (see `discord` in `natives.py`). Required native dependencies, including required anti-cheat, remain blockers; do not assume they can be stubbed safely.
 * To get exact signatures of P/Invoke functions (needed to write shims), parse the managed assembly metadata with `dnfile` (ImplMap table); the decoder used for Photon is described in PIPELINE.md.
 
 ## 4. Debug loop
@@ -44,7 +45,7 @@ Always launch with a log: `MP_LOG=/tmp/game.log tools/launch.sh <dir> <App> <app
 | `dlopen … code signature invalid` | re-sign copied dylibs |
 | a native call returns `BadArguments`/garbage though the library is the real one | **variadic C functions called with fixed arguments** (Apple arm64 passes variadic args on the stack): look at the P/Invoke *EntryPoint* (ImplMap) and wrap it with a non-variadic export (see `voice_shim.c`) |
 | pink / black objects, no log line | a shader variant wasn't translated (`untranslated_variants` in the injector stats) |
-| the whole scene black, UI visible | a post-processing shader misrenders — try `SKIP_SHADER=<name>` |
+| the whole scene black, UI visible | first verify the real camera pose/target and normal startup; then isolate post-processing in a separate copy. A shader exclusion is an incomplete experiment, not a verified fix |
 
 Testing without taking over the screen, live toggles, FPS logging, GPU tracing: see the debug kit in [LEGACY-UNITY.md](LEGACY-UNITY.md#debug-kit-also-useful-for-new-player-ports).
 

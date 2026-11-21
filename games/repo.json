@@ -11,8 +11,8 @@
     "steam_buildid": 26732417,
     "download_gb": 1.0
   },
-  "supported_versions": "Built and verified against manifest 4238581831212146714 (v0.5.2). A game update changes the manifest: re-download the depot and re-run tools/port.py (the pipeline is generic; expect it to just work unless the update adds new native plugins or shader stages).",
-  "status": "playable: menu, tutorial, levels at ~110-130 fps (3024x1898, Apple M5); Steam overlay, networking and voice work; post-processing on except color grading; double-click launcher and Steam Play button",
+  "supported_versions": "Built and verified against manifest 4238581831212146714 (v0.5.2). Other manifests require a rebuild and re-test; shader bindings, assets, managed code or native plugins may need changes even without new shader stages.",
+  "status": "playable: menu, tutorial, levels at ~110-130 fps (3024x1898, Apple M5); Steam init/overlay verified; friend invites and real-room voice verification not recorded; post-processing on except color grading; double-click launcher and Steam Play button",
   "toolkit_version": "0.3.0",
   "port_command": "tools/port.py --data <REPO_Data> --unity <work/unity> --out <dir> --name REPO --allow-incomplete ; tools/natives.py --tweaks --steam --discord --voice",
   "native_plugins": {

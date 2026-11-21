@@ -10,9 +10,9 @@
     "download_gb": 0.6
   },
   "supported_versions": "none",
-  "status": "blocked: HDRP needs compute shaders; all 179 game shaders are D3D11-only in the data",
+  "status": "not ported: HDRP-specific passes and end-to-end rendering remain unverified; selected compute conversion exists but is insufficient by itself; the inspected build has 179 D3D11 graphics shaders",
   "owner": "-",
   "known_issues": [
-    "needs compute-shader translation (not implemented)"
+    "Full HDRP compatibility and gameplay have not been validated with the current compute converter"
   ]
 }

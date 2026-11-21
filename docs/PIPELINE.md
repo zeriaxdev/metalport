@@ -17,7 +17,7 @@ native stand-ins ──► Contents/Plugins  (+ Mono dllmap)
 `port.py` runs shader translation and Metal compilation preflight before app assembly, then patches loose files and bundles in the cloned app. The sections below describe the individual pieces. See [SHADER-CHECKS.md](SHADER-CHECKS.md) for coverage JSON, strict failure handling and explicit incomplete experiments.
 
 ### 1. Unity pieces — `fetch_unity.py`
-The player must be the **exact** Unity version of the game (`6000.3.28f1`); serialized data is version-checked. Unity's release API
+For the normal route, use the **exact** Unity version of the game (`6000.3.28f1`); serialized data is version-checked. The separate [legacy route](LEGACY-UNITY.md) migrates older data and managed APIs to a 2021.3 player. Unity's release API
 (`services.api.unity.com/unity/editor/release/v1/releases?version=...`) lists installers. We need:
 * the **Mac Mono Support** module (~0.7 GB): `Variations/macos_arm64_player_{development,nondevelopment}_mono/UnityPlayer.app`, the
   `Info.plist`/`MainMenu.nib` templates, and `MonoBleedingEdge/etc`.
@@ -37,15 +37,15 @@ The player must be the **exact** Unity version of the game (`6000.3.28f1`); seri
   (same length in `catalog.bin`). Additionally one bundle path was resolved *relative to the directory containing the .app*, hence the `Resources` symlink next to the app.
 
 ### 3. Translate shaders — `xlate_all.py`, `dxbc_rdef.py`, `h2m.cpp`
-Every Unity shader has per-platform *subprograms*. The Windows build only has Direct3D 11 (DXBC) ones. We feed each to **HLSLcc**, Unity's own open-source
-HLSL-bytecode cross compiler, which is exactly what Unity uses to produce its Metal shaders. Two problems had to be solved:
+Unity shaders have per-platform *subprograms*. This converter uses their Direct3D 11 (DXBC) programs; a Windows build may also contain other backends.
+It feeds supported programs to Unity's open-source **HLSLcc** bytecode cross compiler. Two problems had to be solved:
 * **Unity strips the `RDEF` chunk** (constant-buffer/texture reflection) from shipped DXBC, and HLSLcc crashes without it. `dxbc_rdef.py` rebuilds a minimal `RDEF` from the
   `dcl_constantbuffer / dcl_resource / dcl_sampler` declarations inside the shader bytecode (generic names `cbN`, `texN`, `sampler_sN`; each constant buffer is one `float4 cbN_data[size]`).
   Because constant-buffer data is uploaded by Unity using the D3D11 layout (offsets/names live in the shared *parameter blob*), a flat vec4 array is binary compatible.
   Binding indices therefore equal the D3D11 register numbers, which is also what Unity's own Metal output does (`buffer(0)` = `cb0`).
 * **Sampler naming:** HLSLcc declares samplers as `sampler<name>` but references `<name>`; names must start with `sampler` or compilation fails (`use of undeclared identifier`).
 * `h2m` flags: `0x1020081` = UBO | UBO_WITH_INSTANCE_NAME | TRANSLATE_MATRICES | INOUT_SEMANTIC_NAMES.
-* Success rate on R.E.P.O.: 5826 / 5871 unique programs. The 45 failures are `StructuredBuffer` (DOTS/BRG instancing) variants and 1 geometry shader. Custom-data blocks (`dcl_immediateConstantBuffer`) must be skipped
+* Initial R.E.P.O. results (v0.3): 5826 / 5871 unique programs. The 45 failures were `StructuredBuffer` (DOTS/BRG instancing) variants and 1 geometry shader. Use current coverage JSON for a new build. Custom-data blocks (`dcl_immediateConstantBuffer`) must be skipped
   correctly when scanning declarations (length is in the next dword).
 
 ### 4. Inject Metal variants — `inject.py`, `inject_inplace.py`, `metalsub.py`
@@ -63,30 +63,29 @@ Binary layout of a `Shader` object (Unity 2021.2+, subprogram version `202012090
 * Verified by regenerating Unity's own Metal subprograms for its 6 internal shaders: header, keywords, prefix and tail matched 59/59 (the MSL text differs only because our RDEF names are generic).
 
 **Writing the result — never re-serialize whole files.** UnityPy can rewrite a whole serialized file, but doing so on R.E.P.O. broke Photon and Animator controllers (unknown/raw objects). Instead
-`inject_inplace.py` **appends** the new Shader bytes at the end of the file and edits only the 24-byte object-table entry (`i64 pathId, i64 offset, u32 size, i32 type`) plus the header's file size. Everything else stays byte-identical.
+The patcher **appends** replacement Shader/ComputeShader bytes and updates their object-table offsets/sizes plus the header's file size. Format-21/22 headers are handled separately. Every other object's bytes are verified unchanged.
 (`save_typetree()` *returns* the new bytes; `get_raw_data()` keeps returning the old ones — easy to trip on.)
 
 ### 5. Native stand-ins — `natives.py`
 The game's `Plugins/x86_64/*.dll` cannot load. Managed code P/Invokes them by *name*; Mono's `dllmap` (in `MonoBleedingEdge/etc/mono/config`) redirects names to dylibs in `Contents/Plugins`.
-* **Steam:** any installed Steam game ships a universal `libsteam_api.dylib`; the tool picks one that exports `SteamInternal_SteamAPI_Init` and adds a tiny shim for flat-API calls newer than that SDK
+* **Steam:** the tool searches the default local Steam library for a compatible arm64 `libsteam_api.dylib` that exports `SteamInternal_SteamAPI_Init`, and fails if none is found. Not every game/library has one. It adds a shim for flat-API calls newer than that SDK
   (`SteamAPI_SteamUGC_v020`, … implemented via `SteamInternal_FindOrCreateUserInterface`). Borrowed dylibs must be **re-signed** after copying (`codesign --force -s -`) or `dlopen` fails with *code signature invalid*.
-* **Discord Social SDK:** no macOS build available → no-op stand-in (stops a DllNotFoundException every frame, which cost real CPU).
+* **Discord Social SDK:** this port uses a no-op stand-in, disabling Discord integration and avoiding repeated DllNotFoundExceptions. This is not a claim about the vendor's current platform support.
 * **Apple-arm64 variadic trap (found the hard way):** Photon declares the P/Invokes `opus_encoder_ctl_set/_get` with *entry point* `opus_encoder_ctl` — libopus' **variadic** function — and calls it with fixed arguments. On Apple arm64 variadic arguments are passed on the *stack*, so libopus read garbage (`InbandFec … BadArguments`, voice codec never created). `voice_shim.c` exports non-variadic `opus_encoder_ctl`/`opus_decoder_ctl` that forward to the real variadic ones (GET requests are odd numbers and take a pointer). Check the real entry names with the ImplMap table (`tools/natives.py` docs / dnfile), not the managed method names.
 * **Photon Voice:** `opus_egpv` is stock Opus → Homebrew libopus + `voice_shim.c`; `webrtc-audio` (echo cancel/AGC/NS) → pass-through with an energy VAD; `AudioIn` → no native mics.
 * **`metalport_tweaks.dylib`** (injected via `DYLD_INSERT_LIBRARIES`): scales mouse deltas (macOS reports far smaller deltas than Windows raw input), disables App Nap (audio died when unfocused), and optionally calls `Shader.WarmupAllShaders()` through the Mono API.
 
 ### 6. Sign and launch — `launch.sh`
 * Ad-hoc `codesign --force --deep -s -`; **re-sign after every change** inside the bundle (and never re-sign a running app).
-* `MTL_HUD_ENABLED=1` shows Apple's Metal HUD (fps, GPU ms, resolution).
+* Metal HUD is off by default; Steam Launch Options `-hud` or `HUD=1` enables it through the launcher.
 * **Steam overlay:** Steam injects `gameoverlayrenderer.dylib` only when *it* launches the game. We do it by hand: `SteamAppId`/`SteamGameId` + `DYLD_INSERT_LIBRARIES=…/gameoverlayrenderer.dylib`.
   The overlay then shows (Shift+Tab), the presentation mode switches from *Direct* to *Composited* (slightly more GPU time).
 * **Warm-up:** the first launch compiles every Metal variant once (~68 s for R.E.P.O.; the window is unresponsive meanwhile). Metal caches the result per app; later runs don't hitch.
 
 ## Known open problems
-* `Hidden/PostProcessing/Uber` (Unity Post-Processing v2) translates but renders wrong (dark scene, huge chromatic ghosting) → skipped via `SKIP_SHADER`; bloom/lens/grain are off.
-  Suspects: texture-array/`Load` instructions, half-precision paths, or one of the effect shaders now being active. Untested.
-* StructuredBuffer (instancing) variants and geometry/tessellation/compute shaders are not translated.
-* A small corner square in R.E.P.O. renders with a missing-variant shader (not identified).
+* R.E.P.O. color grading remains disabled: `Lut2DBaker` common parameters need a fix. Uber, bloom/lens/grain and the corner square were fixed in v0.5; keep Uber enabled with `cbfix` ([game notes](GAME-NOTES-REPO.md)).
+* Some graphics instancing variants and geometry/tessellation stages remain unsupported. Default preflight stops; explicit incomplete builds do not guarantee a fallback.
+* Selected Unity 2021/2022 compute layouts now convert. See [COMPUTE-SHADERS.md](COMPUTE-SHADERS.md) for input limits and separate compilation, GPU, Unity-player and gameplay evidence. Full HDRP remains unverified.
 
 ## AssetBundles
-`tools/patch_bundles.py` applies the same Shader patch inside UnityFS bundles (re-packed with LZ4) and verifies that every other object is unchanged. Untested on a bundle that actually contains shaders in this repo; used by the ULTRAKILL port (55 patched files).
+`tools/patch_bundles.py` patches Shader and supported ComputeShader objects inside UnityFS bundles (re-packed with LZ4), verifies unchanged object bytes and re-reads the resulting entries. Real ULTRAKILL bundles and opt-in integration tests exercise this path; arbitrary archives still need inspection.
