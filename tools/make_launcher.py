@@ -3,7 +3,8 @@
 tools/launch.sh does (Metal HUD, tweaks + Steam overlay injection, Steam app id, player log, first-run shader warm-up) and checks Steam:
   * Steam not running -> dialog, start Steam, wait for sign-in;
   * the game quits because Steam could not confirm ownership -> dialog saying so.
-Environment set by the caller wins (tests can pass REPO_NO_ACTIVATE etc.; NO_HUD=1, NO_OVERLAY=1 still work).
+Metal HUD is off; Steam Launch Options `-hud` (or HUD=1 in the environment) turns it on.  Environment set by the caller wins
+(tests can pass REPO_NO_ACTIVATE etc.; NO_OVERLAY=1 still works).
 usage: make_launcher.py <App.app> --appid <steam app id> [--title "Display Name"]   then re-sign the app."""
 import argparse, os, plistlib, stat
 ap = argparse.ArgumentParser(); ap.add_argument('app'); ap.add_argument('--appid', required=True); ap.add_argument('--title'); a = ap.parse_args()
@@ -22,7 +23,8 @@ if ! pgrep -x steam_osx >/dev/null; then
   tail -n +$((before + 1)) "$STEAM_LOG" 2>/dev/null | grep -q 'Logged On' || { say "Steam didn't finish signing in. Sign in to Steam, then open $TITLE again." '"OK"' >/dev/null; exit 0; }
 fi
 export SteamAppId=$APPID SteamGameId=$APPID SteamOverlayGameId=$APPID SteamMetalHook=1
-[[ -z "$NO_HUD" ]] && export MTL_HUD_ENABLED=${MTL_HUD_ENABLED:-1}
+args=(); for a in "$@"; do [[ "$a" == -hud || "$a" == HUD=1 ]] && HUD=1 || args+=("$a"); done; set -- "${args[@]}"   # Steam Launch Options: -hud
+[[ -n "$HUD" ]] && export MTL_HUD_ENABLED=1
 export REPO_MOUSE_SCALE=${REPO_MOUSE_SCALE:-2.5}
 INJ="$C/Plugins/repo_tweaks.dylib"; [[ -f "$INJ" ]] || INJ=""
 OVL="$HOME/Library/Application Support/Steam/Steam.AppBundle/Steam/Contents/MacOS/gameoverlayrenderer.dylib"

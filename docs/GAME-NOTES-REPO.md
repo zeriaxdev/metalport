@@ -21,7 +21,7 @@
 
 ## Performance notes
 The player renders at native Retina resolution and the display's 120 Hz; the laptop can run warm. Use the in-game graphics settings (frame cap/VSync, pixelation, quality) or play windowed at a smaller size.
-The Metal HUD (`MTL_HUD_ENABLED=1`, on by default in `launch.sh`) shows resolution, fps, GPU ms and presentation mode.
+The Metal HUD (off by default; Steam Launch Options `-hud`, or `HUD=1 tools/launch.sh …`) shows resolution, fps, GPU ms and presentation mode.
 
 ## Lethal Company (tried, not viable)
 Unity 2022.3, Mono, **HDRP**: 179 shaders compiled for D3D11 only, and HDRP needs compute shaders. Out of scope until compute translation exists.

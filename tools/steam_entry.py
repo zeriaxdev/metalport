@@ -276,12 +276,20 @@ def add(app: Path = DEFAULT_APP, steam: Path = STEAM) -> str:
             flags.append(flag)
             receipt["osextended"].append(flag)
     common["osextended"] = (1, ",".join(flags))
-    if not any(ours(entry) for entry in launch.values()):
-        launch[str(max(map(int, launch), default=-1) + 1)] = (0, {
-            "executable": (1, LAUNCH_EXE),
-            **({"arguments": (1, ARGS)} if ARGS else {}),
-            "config": (0, {"oslist": (1, "macos"), "osarch": (2, struct.pack("<I", 64))}),
-        })
+    for key in [k for k, entry in launch.items() if ours(entry)]:   # re-add fresh: picks up a new label / arguments
+        del launch[key]
+    launch[str(max(map(int, launch), default=-1) + 1)] = (0, {
+        "executable": (1, LAUNCH_EXE),
+        "description": (1, f"Play {NAME} Metal (Unofficial)"),
+        **({"arguments": (1, ARGS)} if ARGS else {}),
+        "config": (0, {"oslist": (1, "macos"), "osarch": (2, struct.pack("<I", 64))}),
+    })
+    receipt.setdefault("windows_only", [])
+    for key, (_t, entry) in launch.items():                     # an .exe entry with no OS limit shows on Mac too: limit it to Windows
+        if ours((_t, entry)) or not entry.get("executable", (1, ""))[1].lower().endswith(".exe"): continue
+        cfg = entry.setdefault("config", (0, {}))[1]
+        if "oslist" not in cfg:
+            cfg["oslist"] = (1, "windows"); receipt["windows_only"].append(entry["executable"][1])
     changed = encode(tree, list(strings)) != raw[68:]
     if changed:
         save(p["cache"], data, strings, records, raw, tree)
@@ -307,6 +315,11 @@ def remove(steam: Path = STEAM) -> str:
         common, launch = tree["appinfo"][1]["common"][1], tree["appinfo"][1]["config"][1]["launch"][1]
         for key in [k for k, entry in launch.items() if ours(entry)]:
             del launch[key]
+        for _, entry in launch.values():
+            cfg = entry.get("config", (0, {}))[1]
+            if entry.get("executable", (1, ""))[1] in receipt.get("windows_only", []) and cfg.get("oslist", (1, ""))[1] == "windows":
+                del cfg["oslist"]
+                if not cfg: del entry["config"]
         if receipt["oslist"] and "oslist" in common:
             common["oslist"] = (1, ",".join(s for s in common["oslist"][1].split(",") if s and s != "macos"))
         if "osextended" in common:

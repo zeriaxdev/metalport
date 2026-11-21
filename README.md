@@ -36,7 +36,7 @@ python3 -m venv .venv && .venv/bin/pip install UnityPy lz4 dnfile
 .venv/bin/python tools/natives.py --app work/out/Game.app --tweaks --steam
 codesign --force --deep -s - work/out/Game.app
 
-# 4. launch (Metal HUD on, Steam overlay, first-run shader warm-up)
+# 4. launch (Metal HUD with HUD=1, Steam overlay, first-run shader warm-up)
 tools/launch.sh work/out Game <steam app id>
 ```
 

@@ -143,6 +143,25 @@ namespace UnityCompat
                         foreach (var c in Resources.FindObjectsOfTypeAll<Camera>())
                             if (c.name == w[1].Replace("_", " ")) foreach (var b in c.GetComponents<Behaviour>()) if (b.GetType().Name == "PostProcessLayer")
                             { var fi = b.GetType().GetField("volumeLayer"); fi.SetValue(b, (LayerMask)int.Parse(w[2])); Debug.Log($"[diag] volmask {c.name} -> {w[2]}"); }
+                    if (w[0] == "call")                                             // call <Type> <method> [float]: invoke on every live object of that type
+                        foreach (var o in Object.FindObjectsOfType<MonoBehaviour>())
+                        {
+                            if (o.GetType().Name != w[1]) continue;
+                            var mi = o.GetType().GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                                .FirstOrDefault(x => x.Name == w[2] && x.GetParameters().Length == (w.Length > 3 ? 1 : 0));
+                            try { mi?.Invoke(o, w.Length > 3 ? new object[] { float.Parse(w[3], System.Globalization.CultureInfo.InvariantCulture) } : null); Debug.Log($"[diag] call {w[1]}.{w[2]} -> {(mi != null ? "ok" : "no such method")}"); }
+                            catch (System.Exception e) { Debug.Log($"[diag] call {w[1]}.{w[2]} threw {e.InnerException?.Message ?? e.Message}"); }
+                        }
+                    if (w[0] == "ppv1")                                             // ppv1 <model field, e.g. eyeAdaptation> 0|1: PostProcessing v1 profile model on/off
+                        foreach (var b in Object.FindObjectsOfType<MonoBehaviour>())
+                        {
+                            if (b.GetType().Name != "PostProcessingBehaviour") continue;
+                            const System.Reflection.BindingFlags F = System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+                            var prof = b.GetType().GetField("profile", F)?.GetValue(b); if (prof == null) continue;
+                            var model = prof.GetType().GetField(w[1], F)?.GetValue(prof); if (model == null) { Debug.Log($"[diag] ppv1 no {w[1]}"); continue; }
+                            var pe = model.GetType().GetProperty("enabled", F); var was = pe?.GetValue(model); pe?.SetValue(model, w[2] == "1");
+                            Debug.Log($"[diag] ppv1 {b.name}/{w[1]} {was} -> {w[2]}");
+                        }
                     if (w[0] == "res") Screen.SetResolution(int.Parse(w[1]), int.Parse(w[2]), Screen.fullScreenMode);
                     if (w[0] == "shadows") QualitySettings.shadows = w[1] == "0" ? ShadowQuality.Disable : ShadowQuality.All;
                     if (w[0] == "comp") foreach (var b in Object.FindObjectsOfType<MonoBehaviour>()) if (b.GetType().Name == w[1]) b.enabled = w[2] == "1";
