@@ -44,3 +44,8 @@ Unity 2022.3, Mono, **HDRP**: 179 graphics shaders compiled for D3D11 in the ins
   folder it ships under `BepInEx/plugins`) there. Mod managers (r2modman, Gale) aren't wired up.
 * Verified: BepInEx 5.4.23.6 loads, a test plugin runs on Apple M5, Harmony patches game code. Multiplayer mods need the same mods on
   everyone's game, as on Windows. Steam Launch Options `-nomods` for a clean run.
+* r2modmac (macOS mod manager) works: set its Steam directory to `~/Library/Application Support/Steam` and the game folder to
+  `steamapps/common/R.E.P.O. Mac Port`, Add mods, Apply to Game, then start R.E.P.O. from Steam or by double-click (not r2modmac's
+  play button, which targets CrossOver for Windows games; skip its Wine/winhttp guide). Verified 2026-11-21: MenuLib 2.6.0 + MoreHead
+  1.4.6 load natively. MoreHead's own asset bundle has Windows-only shaders (`Desired shader compiler platform 14 is not available`):
+  translating mod bundles is the next step.
