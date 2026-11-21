@@ -43,7 +43,7 @@ not done. ⛔ **Out of scope**: not possible with this approach.
 | Steam library Play button for the Mac app | ✅ Works | `tools/steam-play <Game.app>` (quits and reopens Steam; Play button + Steam Cloud in one step); may need re-running after a game update. Undo: `tools/steam-play <Game.app> remove`. |
 | Metal HUD on demand | ✅ Works | Steam Launch Options `-hud`, or `HUD=1`. |
 | Steam Cloud for native saves | ✅ Works | Part of `tools/steam-play` (`steam_entry.py --cloud`): adds a macOS root override so Steam syncs `~/Library/Application Support/<bundle id>` with the Windows save folder. Back up saves first: the first sync replaces local files that differ from the cloud. |
-| Mods (BepInEx) | ❌ Not yet | Needs the macOS Doorstop loader. |
+| Mods (BepInEx 5) | ✅ Works | `tools/mods <Game.app> install` (official BepInEx 5.4.23.6 macOS universal build, pinned + checksum); mods go in `~/Library/Application Support/metalport/mods/<bundle id>/BepInEx/plugins`. Verified on R.E.P.O.: plugins load and Harmony patches game code on Apple Silicon. Mods that ship Windows-native DLLs won't work. Steam Launch Options `-nomods` starts without mods. |
 | One-step installer from your own Steam copy | ❌ Not yet | Today: the commands in the README. |
 
 ### Tooling
@@ -71,5 +71,4 @@ Details per game: [games/](../games).
 
 1. One-step installer: build, install, Play button and cleanup from your own Steam copy.
 2. Post-processing v2 color grading on Metal.
-3. Mods via BepInEx.
-4. HDRP (Lethal Company).
+3. HDRP (Lethal Company).

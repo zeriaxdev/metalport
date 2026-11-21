@@ -37,3 +37,10 @@ Unity 2022.3, Mono, **HDRP**: 179 shaders compiled for D3D11 only, and HDRP need
   rules cover `LocalLow/semiwork/Repo/**/*.es3` and the cosmetics preset icons; the override maps them to
   `~/Library/Application Support/local.repo.port` on macOS. Mac, CrossOver and Windows now share one cloud copy.
 * First sync downloaded all 171 cloud files and replaced local `SettingsData.es3` and `CurrentKeyBindings.es3` with the cloud versions.
+
+## Mods (BepInEx)
+* `tools/mods ports/R.E.P.O.app install` (done 2026-11-21); put mods in `~/Library/Application Support/metalport/mods/local.repo.port/BepInEx/plugins`
+  (`tools/mods ports/R.E.P.O.app open`). Most R.E.P.O. mods on Thunderstore are BepInEx 5 C# plugins: copy the mod's `.dll` (and any
+  folder it ships under `BepInEx/plugins`) there. Mod managers (r2modman, Gale) aren't wired up.
+* Verified: BepInEx 5.4.23.6 loads, a test plugin runs on Apple M5, Harmony patches game code. Multiplayer mods need the same mods on
+  everyone's game, as on Windows. Steam Launch Options `-nomods` for a clean run.

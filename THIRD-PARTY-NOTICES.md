@@ -22,6 +22,7 @@ which terms; it is not a substitute for those terms.
 |---|---|---|
 | Unity macOS player and Mono class libraries | downloaded by `tools/fetch_unity.py` from Unity's official release service | Unity's terms: https://unity.com/legal/terms-of-service |
 | Steamworks API library (`libsteam_api.dylib`) | copied from a Steam game already installed on your Mac | Valve / Steamworks terms |
+| BepInEx 5.4.23.6 (with UnityDoorstop 4.6.0, HarmonyX) | downloaded by `tools/mods install` from BepInEx's official GitHub release into your mods folder | BepInEx and UnityDoorstop: LGPL-2.1; HarmonyX: MIT; https://github.com/BepInEx/BepInEx |
 | libopus (voice games only) | your Homebrew installation | BSD-3-Clause, https://opus-codec.org/license/ |
 | Your game's data | your own Steam download (APFS clone) | the game's license; do not redistribute |
 

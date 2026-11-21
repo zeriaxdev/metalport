@@ -47,6 +47,9 @@ codesign --force --deep -s - work/out/Game.app
 
 # 5. optional: green Play button in Steam's own library entry + Steam Cloud for the saves (quits and reopens Steam)
 tools/steam-play work/out/Game.app
+
+# 6. optional: BepInEx mods (then: tools/mods work/out/Game.app open, and drop mod .dll files in)
+tools/mods work/out/Game.app install
 ```
 
 Built apps live in `ports/` (git-ignored), e.g. `ports/R.E.P.O.app`: open them like any app, or with Steam's Play button (`tools/steam_entry.py`).
