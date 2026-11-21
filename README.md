@@ -42,8 +42,11 @@ python3 -m venv .venv && .venv/bin/pip install UnityPy lz4 dnfile
 .venv/bin/python tools/natives.py --app work/out/Game.app --tweaks --steam
 codesign --force --deep -s - work/out/Game.app
 
-# 4. launch (Metal HUD with HUD=1, Steam overlay, first-run shader warm-up)
-tools/launch.sh work/out Game <steam app id>
+# 4. double-click launcher (Steam checks, overlay, first-run shader warm-up; Steam Launch Options -hud shows the Metal HUD)
+.venv/bin/python tools/make_launcher.py work/out/Game.app --appid <steam app id> && codesign --force --deep -s - work/out/Game.app
+
+# 5. optional: green Play button in Steam's own library entry + Steam Cloud for the saves (quits and reopens Steam)
+tools/steam-play work/out/Game.app
 ```
 
 Built apps live in `ports/` (git-ignored), e.g. `ports/R.E.P.O.app`: open them like any app, or with Steam's Play button (`tools/steam_entry.py`).

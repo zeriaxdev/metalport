@@ -40,9 +40,9 @@ not done. ⛔ **Out of scope**: not possible with this approach.
 | Voice chat (Photon Voice + Opus) | ✅ Works | Echo cancellation is a pass-through. |
 | Discord SDK | ◐ Partial | No-op stand-in: the game runs, Discord features are off. |
 | Double-click launcher with Steam checks | ✅ Works | Dialogs for "Steam not running" and "Steam couldn't confirm ownership". |
-| Steam library Play button for the Mac app | ✅ Works | `steam_entry.py`; Steam must be closed while it runs; may need re-running after a game update. |
+| Steam library Play button for the Mac app | ✅ Works | `tools/steam-play <Game.app>` (quits and reopens Steam; Play button + Steam Cloud in one step); may need re-running after a game update. Undo: `tools/steam-play <Game.app> remove`. |
 | Metal HUD on demand | ✅ Works | Steam Launch Options `-hud`, or `HUD=1`. |
-| Steam Cloud for native saves | ✅ Works | `steam_entry.py --cloud`: adds a macOS root override so Steam syncs `~/Library/Application Support/<bundle id>` with the Windows save folder. Back up saves first: the first sync replaces local files that differ from the cloud. |
+| Steam Cloud for native saves | ✅ Works | Part of `tools/steam-play` (`steam_entry.py --cloud`): adds a macOS root override so Steam syncs `~/Library/Application Support/<bundle id>` with the Windows save folder. Back up saves first: the first sync replaces local files that differ from the cloud. |
 | Mods (BepInEx) | ❌ Not yet | Needs the macOS Doorstop loader. |
 | One-step installer from your own Steam copy | ❌ Not yet | Today: the commands in the README. |
 
