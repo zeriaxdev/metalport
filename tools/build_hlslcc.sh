@@ -1,7 +1,8 @@
 #!/bin/sh
 # Builds tools/h2m: a tiny CLI around Unity's open-source HLSLcc (DXBC -> Metal source). Needs git, cmake, clang.
 set -e; cd "$(dirname "$0")"; mkdir -p .build; cd .build
-[ -d HLSLcc ] || git clone --depth 1 https://github.com/Unity-Technologies/HLSLcc.git
+REV=3ea1fcd6bd0ac445bc078de0bf32f0950188577b   # pinned HLSLcc commit (MIT-style license + bstring BSD notice, see THIRD-PARTY-NOTICES.md)
+[ -d HLSLcc ] || { git init -q HLSLcc && git -C HLSLcc fetch -q --depth 1 https://github.com/Unity-Technologies/HLSLcc.git $REV && git -C HLSLcc checkout -q FETCH_HEAD; }
 mkdir -p HLSLcc/build && cd HLSLcc/build
 cmake -DHLSLCC_LIBRARY_SHARED=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_CXX_FLAGS="-std=c++14 -w" .. >/dev/null
 make -j8 >/dev/null; cd ../../..

@@ -6,8 +6,12 @@ existing Windows data in a macOS Unity player and translating its shaders from D
 Ported so far: **R.E.P.O.** (playable, ~110-130 fps at 3024x1898 on an Apple M5, Steam overlay, networking and voice) and **Outer Wilds**
 (playable with one rendering issue). **What works, what doesn't, and which games are supported: [docs/FEATURES.md](docs/FEATURES.md).**
 
-> This repo contains **tooling only**. It never contains game files, Valve libraries, or Unity binaries. You must own the game
-> (the tools read your own Steam download) and you must not redistribute the patched result. Unity's player is fetched from Unity's own CDN.
+> **Notice.** This independent project is not affiliated with, endorsed by, or sponsored by Unity Technologies, Valve, Discord, or any game
+> developer or publisher. It contains no game files and no Unity or Valve binaries: those come from your own downloads, on your own Mac
+> (the Unity player from Unity's official download service, the game from your own Steam library). You must own each game you port and
+> comply with its license terms; do not share the result. The toolkit's MIT license covers only this toolkit, not game content, engine
+> runtimes or other third-party software (see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)). Product names and trademarks belong to
+> their respective owners.
 
 ## Does it work for my game?
 
