@@ -1,6 +1,6 @@
 # Features and supported games
 
-Last reviewed: 2026-11-21 (toolkit 0.5). Update this page in the same commit as any change it describes.
+Last reviewed: 2026-11-21 (toolkit 0.6). Update this page in the same commit as any change it describes.
 
 **Legend:** ✅ **Works**: used in a shipped port. ◐ **Partial**: works with limits (see notes). ❌ **Not yet**: planned or possible,
 not done. ⛔ **Out of scope**: not possible with this approach.
@@ -27,7 +27,7 @@ not done. ⛔ **Out of scope**: not possible with this approach.
 | float3 constant overwrite fix | ✅ Works | Metal writes a float3 as 16 bytes; `cbfix.py` (2020.2+) and `shader2021.py` (2019 data) move the overwritten value. |
 | Post-processing v1 (built-in) | ✅ Works | Eye adaptation uses a compute shader; games ship it disabled. |
 | Post-processing v2 | ◐ Partial | Everything except color grading, which is switched off (its LUT bakes to a constant on Metal). |
-| Compute shaders | ◐ Partial | Converter for Unity 2021/2022 compute data exists with unit tests; not yet verified in a running game. |
+| Compute shaders | ◐ Partial | Unity 2021/2022 compute data converts and compiles; on ULTRAKILL three kernels run correctly through Unity's player on Metal (GPU readback matches). Not yet verified visually in gameplay ([details](COMPUTE-SHADERS.md#verification-status-ultrakill-unity-2022329f1-apple-m5-2026-11-21)). |
 | Geometry, hull and domain (tessellation) shaders | ❌ Not yet | Shaders that need them are skipped and fall back. |
 | Vulkan-only (SPIR-V) shader variants | ❌ Not yet | Only D3D11 bytecode is translated. |
 
@@ -64,7 +64,7 @@ Details per game: [games/](../games).
 |---|---|---|---|---|
 | R.E.P.O. | Unity 6000.3, Mono | ✅ Playable | depot 3241661, manifest 4238581831212146714 (v0.5.2) | Color grading off. |
 | Outer Wilds | Unity 2019.4 on the 2021.3 player | ◐ Playable with issues | depot 753641, manifest 2759471679100125861 | Giant's Deep surface renders black from afar. |
-| ULTRAKILL | Unity 2022.3, Mono | ◐ In progress | depot 1229491, manifest 22957324 | Menu and tutorial work; campaign not verified; compute effects off. |
+| ULTRAKILL | Unity 2022.3, Mono | ◐ In progress | depot 1229491, manifest 22957324 | Menu and tutorial work; campaign not verified; the installed build still has its compute effects off (converted palette kernel passes in Unity, not yet installed). |
 | Lethal Company | Unity 2022.3, HDRP | ❌ Blocked | | Needs HDRP support. |
 
 ## Roadmap (not started)

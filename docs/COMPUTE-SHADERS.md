@@ -43,4 +43,18 @@ The opt-in suite uses your local ULTRAKILL bundle. Game shader bytecode is not s
 
 Tested GPU operations: 512 palette-LUT texels, 64 mask texels and 64 composite texels. The composite check uploads constant-buffer values using the rebuilt metadata. JFA and Composite1PX compile successfully but have no readback reference in this suite.
 
+### Verification status (ULTRAKILL, Unity 2022.3.29f1, Apple M5, 2026-11-21)
+
+| Level | Palette `ComputeLUT` | Outline `CreateMask` | Outline `Composite` | Outline `JFA`, `Composite1PX` |
+|---|---|---|---|---|
+| Translates and compiles with Metal | ✅ | ✅ | ✅ | ✅ |
+| Direct Metal dispatch, GPU readback vs CPU reference | ✅ 512/512 texels | ✅ 64/64 | ✅ 64/64 (±1e-6) | not tested |
+| Through Unity's player (AssetBundle load, kernel bindings, constants, dispatch, readback) | ✅ 512/512 | ✅ 64/64 | ✅ 64/64 | kernels found, not dispatched |
+| In gameplay | ◐ the game's palette code dispatches the converted kernel without engine errors; visual result **not verified** | not used by gameplay | not used by gameplay | not used by gameplay |
+
+Notes: the Unity-player test ran in a disposable clone of the app with a copied profile; the installed app and saves were checked unchanged
+by hash. ULTRAKILL's gameplay outlines use regular shader blits (`PostProcessV2_Handler.SetupOutlines`), not `OutlineCompute`. The
+gameplay comparison is blocked: its automated test scene renders nearly black even with compute off, so the baseline is not yet
+trustworthy.
+
 Full gameplay through Unity's player, arbitrary HDRP/VFX pipelines, native audio, Steam networking and other games' compute kernels are not implied by these tests. The compute components adapt MIT-licensed code from wisnuub/ror2-silicon-macos; see `tools/shaderconv-LICENSE.txt`.

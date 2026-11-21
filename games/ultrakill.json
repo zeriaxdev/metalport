@@ -9,7 +9,7 @@
     "manifest": "22957324"
   },
   "supported_versions": "Per the adopted upstream converter: (1) the original Windows build used during development (the user's existing CrossOver copy) and (2) Steam depot 1229491 manifest 22957324. It verifies required game files and REJECTS other versions; every game update needs a new 'verified patch pack'. Newer-version-only changes (portal/blood patches) are applied only for the newer depot; older builds read disabledComputeShaders from LocalPrefs.json.",
-  "status": "in progress: native arm64 + Metal, menu and tutorial render at 3024x1898 ~120 fps; campaign playthrough not yet verified; compute-shader effects (outline, palette LUT) disabled; Steam init OK, overlay/cloud untested",
+  "status": "in progress: native arm64 + Metal, menu and tutorial render at 3024x1898 ~120 fps; campaign playthrough not yet verified; installed build keeps compute effects (palette LUT) on the CPU fallback; Steam init OK, overlay/cloud untested",
   "approach_differences": [
     "translates shaders to Metal 2.2 (HLSLcc plus HLSL decompiler/vkd3d/SPIRV-Cross for recovery)",
     "compiles the game's Burst routines for arm64+x64",
@@ -31,5 +31,11 @@
     "The port copied tools/ unchanged (inject.py, inject_inplace.py, xlate_all.py, metalsub.py, dxbc_rdef.py were byte-identical to this repo) and added only tools/patch_bundles.py (now upstreamed here).",
     "The final app was produced by the adopted upstream converter, not by this toolkit: it has its own shader 'upgrade' passes on the translated MSL (color-output ABI, texture dimension queries, transparent/fixed (inline) samplers, clip distances for portals, recovered cage shader, unsigned light indices) plus Burst arm64 compilation and Cecil patches - game-specific, but several are generic repair classes (see docs/PIPELINE.md 'Open problems')."
   ],
-  "upstream": "based on github.com/Yash-Singh1/ultrakill-mac (at 0384137d)"
+  "upstream": "based on github.com/Yash-Singh1/ultrakill-mac (at 0384137d)",
+  "compute": {
+    "objects": "PaletteCompute (ComputeLUT), OutlineCompute (CreateMask, JFA, Composite, Composite1PX)",
+    "verified_2026_11_21": "all 5 kernels compile; ComputeLUT 512/512, CreateMask 64/64, Composite 64/64 texels match CPU references through Unity 2022.3.29f1's player on Metal (disposable clone, copied profile); JFA/Composite1PX not dispatched",
+    "gameplay": "the game's palette code (ConvertPaletteToLUT.ConvertPalette) dispatches the converted kernel without engine errors; visual parity unverified because the automated Level 0-1 baseline renders nearly black even with compute off; gameplay outlines use shader blits, not OutlineCompute",
+    "next": "check whether the installed app renders normal gameplay, then compare palette with compute on vs off in a separate copy before installing"
+  }
 }
