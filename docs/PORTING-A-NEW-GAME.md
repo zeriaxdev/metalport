@@ -10,7 +10,7 @@ Download the Windows build (Steam Mac can't install Windows-only games; use the 
 | Report line | Meaning |
 |---|---|
 | Scripting backend: **IL2CPP** | stop — game logic is compiled x86 (needs a different approach) |
-| Render pipeline: **HDRP** | stop — HDRP needs compute shaders in the data, none translated |
+| Render pipeline: **HDRP** | full-pipeline compatibility is unverified; selected compute formats now convert, which alone is insufficient |
 | Shaders: only `D3D11` + 6 internal ones | expected; the toolkit adds Metal |
 | Shaders: `OpenGLCore`/`Vulkan` for all | even easier: an x64 player + `-force-glcore` may already run (see Frown/UltraNix for ULTRAKILL) but not on arm64 |
 | Native plugins | each is a work item (see §3) |
@@ -20,7 +20,7 @@ Quick check of required Unity version: `strings <Data>/globalgamemanagers | head
 [LEGACY-UNITY.md](LEGACY-UNITY.md) instead (runs the data on a 2021.3 player; several times the work).
 
 ## 2. Run the pipeline
-See the README quick start. `tools/port.py` is idempotent per output folder (delete the `.app` to redo). Re-running after a game update: re-download the depot, run it again.
+See the README quick start. Use a fresh output folder: `tools/port.py` refuses an existing app. Shader translation and Metal compilation must pass before assembly; loose and bundled shaders are patched in the copied app. See [SHADER-CHECKS.md](SHADER-CHECKS.md) for JSON reports, failure statuses and explicit incomplete experiments.
 
 ## 3. Native plugins
 List: `ls <Data>/Plugins/x86_64`. For each, find the P/Invoke library *name* the managed code uses (`strings <Data>/Managed/*.dll | grep -i <name>`), then decide:
@@ -49,7 +49,7 @@ Always launch with a log: `MP_LOG=/tmp/game.log tools/launch.sh <dir> <App> <app
 Testing without taking over the screen, live toggles, FPS logging, GPU tracing: see the debug kit in [LEGACY-UNITY.md](LEGACY-UNITY.md#debug-kit-also-useful-for-new-player-ports).
 
 ## 5. Things you will probably still hit
-* **AssetBundles with shaders** (Addressables / `StreamingAssets`): run `tools/patch_bundles.py <bundle>...` from `tools/` (contributed by the Codex session that ported ULTRAKILL: patches each serialized file inside a UnityFS bundle with the same append technique, re-packs with LZ4, and asserts every non-shader object is byte-identical). It also accepts loose serialized files.
+* **AssetBundles with shaders** (Addressables / `StreamingAssets`): `port.py` now invokes the existing `tools/patch_bundles.py` helper automatically. For manual work, pass copies of the bundle files to the helper; it rewrites them in place, preserves non-shader object bytes and verifies the repacked entries. It also accepts loose serialized files.
 * **Input:** mouse deltas are small → `MP_MOUSE_SCALE`; keyboard layout switching can spam the log.
 * **Window titles / Win32 calls** (`user32.dll FindWindow`) throw once per call; harmless unless the game depends on them.
 * **Performance:** the player runs at the display's native resolution and refresh (ProMotion 120 Hz) → cap frame rate or lower resolution in-game if the laptop runs hot.

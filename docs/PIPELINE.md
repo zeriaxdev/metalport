@@ -14,6 +14,8 @@ native stand-ins ──► Contents/Plugins  (+ Mono dllmap)
 
 ## Step by step (what `tools/port.py` does)
 
+`port.py` runs shader translation and Metal compilation preflight before app assembly, then patches loose files and bundles in the cloned app. The sections below describe the individual pieces. See [SHADER-CHECKS.md](SHADER-CHECKS.md) for coverage JSON, strict failure handling and explicit incomplete experiments.
+
 ### 1. Unity pieces — `fetch_unity.py`
 The player must be the **exact** Unity version of the game (`6000.3.28f1`); serialized data is version-checked. Unity's release API
 (`services.api.unity.com/unity/editor/release/v1/releases?version=...`) lists installers. We need:

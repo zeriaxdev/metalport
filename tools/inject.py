@@ -1,13 +1,22 @@
-import sys, os, struct, bisect, collections, UnityPy, lz4.block
+import sys, os, struct, bisect, collections, json, UnityPy, lz4.block
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from metalsub import *
 import cbfix
+from metal_check import require_valid
+from compute_support import patch_compute
 from UnityPy.enums import ShaderGpuProgramType as T
 S = os.path.dirname(os.path.abspath(__file__))
 def tname(v):
     try: return T(v).name.replace('kShaderGpuProgram', '')
     except Exception: return str(v)
 BAD = ('DX11Geometry', 'DX11Hull', 'DX11Domain', 'DX11Compute')
+
+def cached_msl(sub):
+    p = f'{S}/cache/{dxbc_hash(sub)}'
+    if os.path.exists(p + '.translation.json'):
+        with open(p + '.translation.json') as stream:
+            if json.load(stream).get('failed'): return None
+    return open(p + '.metal', 'rb').read() if os.path.exists(p + '.metal') else None
 
 def read_subs(tt, pi, blob):
     """Chunk 0 holds the table of (offset, length, chunk index); small shaders keep their data in chunk 0 itself."""
@@ -43,9 +52,16 @@ def patch_shader(tt, stats):
     mtl = {}
     for i, s in enumerate(subs):
         if types[i] in VS_TYPES | PS_TYPES and b'DXBC' in s:
-            p = f'{S}/cache/{dxbc_hash(s)}.metal'
-            if os.path.exists(p): mtl[i] = open(p, 'rb').read()
+            source = cached_msl(s)
+            if source is not None: mtl[i] = source
             else: stats['untranslated_variants'] += 1
+    required = sum(t in VS_TYPES | PS_TYPES for t in types)
+    if len(mtl) != required:
+        if os.environ.get('ALLOW_PARTIAL_SHADER') != '1':
+            stats['skip_incomplete_shader'] += 1
+            return False
+        stats['partial_shaders'] += 1
+        stats['omitted_graphics_variants'] += required - len(mtl)
     users = collections.defaultdict(list); inpass = {}     # Unity 2020.2+: parameter blob index -> translated programs that use it
     for ss in tt['m_ParsedForm']['m_SubShaders']:
         for ps in ss['m_Passes']:
@@ -66,6 +82,7 @@ def patch_shader(tt, stats):
         fixed = {i: cbfix.patch_msl(mtl[i], pl[1], pl[2]) for i in progs}
         if any(v is None for v in fixed.values()): stats['cbfix_refused'] += 1; continue
         mtl.update(fixed); params[pidx] = pl[0]; stats['cbfix_scalars_moved'] += len(pl[1])
+    require_valid(mtl.values())  # Check final MSL after cbfix, before changing the shader.
     done = {}; new = []
     for i, s in enumerate(subs):
         if i in mtl: new.append(build_metal_sub(s, mtl[i])); done[i] = True
@@ -130,11 +147,12 @@ def refix_metal(tt, stats):
         if not pl: continue
         fixed = {}
         for i in progs:
-            p = f'{S}/cache/{dxbc_hash(subs4[i])}.metal' if b'DXBC' in subs4[i] else None
-            if not p or not os.path.exists(p): fixed = None; break
-            fixed[i] = cbfix.patch_msl(open(p, 'rb').read(), pl[1], pl[2])
+            source = cached_msl(subs4[i]) if b'DXBC' in subs4[i] else None
+            if source is None: fixed = None; break
+            fixed[i] = cbfix.patch_msl(source, pl[1], pl[2])
             if fixed[i] is None: fixed = None; break
         if not fixed: stats['cbfix_refused'] += 1; continue
+        require_valid(fixed.values())
         for i, msl in fixed.items(): new[i] = build_metal_sub(subs4[i], msl)
         new[pidx] = pl[0]; changed = True; stats['cbfix_scalars_moved'] += len(pl[1])
     if not changed: return False
@@ -149,10 +167,10 @@ def refix_metal(tt, stats):
 if __name__ == '__main__':
     data = sys.argv[1]; env = UnityPy.load(data); stats = collections.Counter(); modified = {}
     for obj in env.objects:
-        if obj.type.name != 'Shader': continue
+        if obj.type.name not in ('Shader', 'ComputeShader'): continue
         try:
             tt = obj.read_typetree()
-            if patch_shader(tt, stats):
+            if (patch_compute if obj.type.name == 'ComputeShader' else patch_shader)(tt, stats):
                 obj.save_typetree(tt); modified[id(obj.assets_file)] = obj.assets_file
         except Exception as e:
             stats['errors'] += 1
@@ -161,3 +179,4 @@ if __name__ == '__main__':
     for f in modified.values():
         path = next(k for k, v in env.files.items() if v is f)
         print('writing', path); open(path, 'wb').write(f.save())
+    if stats['errors'] or stats['compute_failed'] or stats['partial_shaders'] or stats['skip_incomplete_shader'] or stats['skip_unsupported_stage']: sys.exit(2)

@@ -1,16 +1,68 @@
 #!/usr/bin/env python3
-"""One command for the whole shader-and-app pipeline on a Windows Unity (Mono, D3D11) game.
-usage: port.py --data <Game>_Data --unity <fetch_unity out> --out <dir> --name <App> [--skip-shader NAME,...]
-Afterwards: natives (tools/natives.py), then `codesign --force --deep -s - <App>.app`.  See docs/."""
-import argparse, os, subprocess, sys
-ap = argparse.ArgumentParser(); ap.add_argument('--data', required=True); ap.add_argument('--unity', required=True); ap.add_argument('--out', required=True)
-ap.add_argument('--name', required=True); ap.add_argument('--skip-shader', default=''); ap.add_argument('--dev', action='store_true'); a = ap.parse_args()
-here = os.path.dirname(os.path.abspath(__file__)); py = sys.executable; run = lambda *c, **k: subprocess.run(c, check=True, **k)
-if not os.path.exists(f'{here}/h2m'): run('sh', f'{here}/build_hlslcc.sh')
-os.makedirs(a.out, exist_ok=True)
-run(py, f'{here}/assemble_app.py', '--data', a.data, '--unity', a.unity, '--out', a.out, '--name', a.name, *(['--dev'] if a.dev else []))
-os.makedirs(f'{here}/cache', exist_ok=True)
-run(py, f'{here}/xlate_all.py', a.data)                                                       # D3D11 bytecode -> Metal source (cache/)
-env = dict(os.environ, SKIP_SHADER=a.skip_shader)
-run(py, f'{here}/inject_inplace.py', f'{a.out}/{a.name}.app/Contents/Resources/Data', env=env) # append Metal variants to the Shader objects
-print('done: now add natives (tools/natives.py), sign, launch with tools/launch.sh')
+"""Assemble a Mac Unity app only after shader translation and Metal compilation checks.
+Native plugins, signing and gameplay verification remain separate steps; see docs/.
+"""
+import argparse
+import os
+import subprocess
+import sys
+from pathlib import Path
+from shader_coverage import scan, finish
+from patch_bundles import patch_file
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    for name in ('data', 'unity', 'out', 'name'):
+        parser.add_argument('--' + name, required=True)
+    parser.add_argument('--skip-shader', default='')
+    parser.add_argument('--allow-incomplete', action='store_true', help='Keep shader gaps visible and produce an explicitly incomplete app')
+    parser.add_argument('--dev', action='store_true')
+    args = parser.parse_args(argv)
+    here = Path(__file__).resolve().parent
+    output = Path(args.out).resolve()
+    app = output / (args.name + '.app')
+    if app.exists():
+        parser.error(f'{app} exists; use a new output directory')
+    if Path(args.data).resolve() in app.parents:
+        parser.error('The output app must be outside the source Data directory')
+    run = lambda *command: subprocess.run(command, check=True)
+    if not (here / 'h2m').exists():
+        run('sh', str(here / 'build_hlslcc.sh'))
+    output.mkdir(parents=True, exist_ok=True)
+    run(sys.executable, str(here / 'xlate_all.py'), args.data,
+        '--report', str(output / 'shader-source-coverage.json'), '--skip-shader', args.skip_shader,
+        *(['--allow-incomplete'] if args.allow_incomplete else []))
+    run(sys.executable, str(here / 'assemble_app.py'), '--data', args.data, '--unity', args.unity,
+        '--out', str(output), '--name', args.name, *(['--dev'] if args.dev else []))
+    target = app / 'Contents/Resources/Data'
+    inventory, _ = scan(target, set(filter(None, args.skip_shader.split(','))))
+    if any(issue['code'] == 'read_error' for issue in inventory['issues']):
+        finish(inventory, output / 'shader-output-coverage.json')
+        return 2
+    os.environ['SKIP_SHADER'] = args.skip_shader
+    os.environ['ALLOW_PARTIAL_SHADER'] = '1' if args.allow_incomplete else '0'
+    for item in inventory['files']:
+        if any(shader['kind'] in ('Shader', 'ComputeShader') for shader in item['shaders']):
+            try:
+                patch_file(Path(item['path']))
+            except Exception as error:
+                inventory['phase'] = 'output'
+                inventory['issues'].append({'code': 'injection_failed', 'file': item['path'], 'detail': f'{type(error).__name__}: {error}'})
+                finish(inventory, output / 'shader-output-coverage.json')
+                return 2
+    report, _ = scan(target, set(filter(None, args.skip_shader.split(','))), audit=True)
+    complete = finish(report, output / 'shader-output-coverage.json')
+    fatal = any(issue['code'] in ('read_error', 'no_shaders') for issue in report['issues'])
+    if fatal or (not complete and not args.allow_incomplete):
+        return 2
+    print(('Shader coverage complete.' if complete else 'INCOMPLETE shader coverage (--allow-incomplete).') +
+          ' Next: add native plugins, sign, and verify rendering/audio/networking; see docs/.')
+    return 0
+
+
+if __name__ == '__main__':
+    try:
+        sys.exit(main())
+    except subprocess.CalledProcessError as error:
+        sys.exit(error.returncode)
