@@ -3,8 +3,8 @@
 Run a **Windows-only Unity game natively on Apple Silicon with Metal** — no Rosetta, no Wine/CrossOver — by wrapping the game's
 existing Windows data in a macOS Unity player and translating its shaders from Direct3D 11 to Metal.
 
-First (and so far only) game: **R.E.P.O.** (Unity 6000.3, Mono). Main menu and levels render at ~120 fps at 3024x1898 on an Apple M5,
-with Steam overlay and Steam networking working. See [docs/GAME-NOTES-REPO.md](docs/GAME-NOTES-REPO.md) for what works and what doesn't.
+Ported so far: **R.E.P.O.** (playable, ~110-130 fps at 3024x1898 on an Apple M5, Steam overlay, networking and voice) and **Outer Wilds**
+(playable with one rendering issue). **What works, what doesn't, and which games are supported: [docs/FEATURES.md](docs/FEATURES.md).**
 
 > This repo contains **tooling only**. It never contains game files, Valve libraries, or Unity binaries. You must own the game
 > (the tools read your own Steam download) and you must not redistribute the patched result. Unity's player is fetched from Unity's own CDN.
@@ -53,7 +53,7 @@ R.E.P.O. is wired up already: double-click `R.E.P.O.app` (not in git; `./run.sh`
 | `tools/inject.py`, `inject_inplace.py`, `metalsub.py` | writes the Metal variants into the game's `Shader` objects |
 | `tools/natives.py` + `*.c`, `repo_tweaks.m` | Steam / Discord / Photon-voice / mouse / warm-up stand-ins |
 | `tools/launch.sh`, `run.sh` | launchers |
-| `docs/` | how it works, porting guide, older-Unity path, R.E.P.O. and Outer Wilds notes |
+| `docs/` | feature and game support list, how it works, porting guide, older-Unity path, per-game notes |
 | `games/` | per-game data (Steam ids, depot manifests = supported versions, status, issues) for R.E.P.O., ULTRAKILL, Lethal Company |
 
 ## Status and versions

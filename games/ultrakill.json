@@ -9,8 +9,7 @@
     "manifest": "22957324"
   },
   "supported_versions": "Per the adopted upstream converter: (1) the original Windows build used during development (the user's existing CrossOver copy) and (2) Steam depot 1229491 manifest 22957324. It verifies required game files and REJECTS other versions; every game update needs a new 'verified patch pack'. Newer-version-only changes (portal/blood patches) are applied only for the newer depot; older builds read disabledComputeShaders from LocalPrefs.json.",
-  "status": "working in the Codex session: native arm64 + Metal, menu and tutorial render at 3024x1898 ~120 fps; campaign playthrough not yet verified; compute-shader effects (outline, palette LUT) disabled; Steam init OK, overlay/cloud untested",
-  "owner": "Codex session (do not modify its app/fixtures); upstream source: github.com/Yash-Singh1/ultrakill-mac (adopted at 0384137d)",
+  "status": "in progress: native arm64 + Metal, menu and tutorial render at 3024x1898 ~120 fps; campaign playthrough not yet verified; compute-shader effects (outline, palette LUT) disabled; Steam init OK, overlay/cloud untested",
   "approach_differences": [
     "translates shaders to Metal 2.2 (HLSLcc plus HLSL decompiler/vkd3d/SPIRV-Cross for recovery)",
     "compiles the game's Burst routines for arm64+x64",
@@ -29,7 +28,8 @@
     "AssetBundles also contain shaders: patch bundles, not only data files"
   ],
   "toolkit_usage": [
-    "Codex copied tools/ unchanged (inject.py, inject_inplace.py, xlate_all.py, metalsub.py, dxbc_rdef.py were byte-identical to this repo) and added only tools/patch_bundles.py (now upstreamed here).",
+    "The port copied tools/ unchanged (inject.py, inject_inplace.py, xlate_all.py, metalsub.py, dxbc_rdef.py were byte-identical to this repo) and added only tools/patch_bundles.py (now upstreamed here).",
     "The final app was produced by the adopted upstream converter, not by this toolkit: it has its own shader 'upgrade' passes on the translated MSL (color-output ABI, texture dimension queries, transparent/fixed (inline) samplers, clip distances for portals, recovered cage shader, unsigned light indices) plus Burst arm64 compilation and Cecil patches - game-specific, but several are generic repair classes (see docs/PIPELINE.md 'Open problems')."
-  ]
+  ],
+  "upstream": "based on github.com/Yash-Singh1/ultrakill-mac (at 0384137d)"
 }

@@ -31,6 +31,6 @@
     }
   ],
   "recommendation": "Try KlikCore2 first (it reads the exe as-is). Review the source before building (unknown author, no license text, downloads a SoundFont on first run). Fallback: CrossOver tuning.",
-  "safety_note": "Claude did not build or run KlikCore2: unvetted third-party code; the user should review and run it themselves.",
+  "safety_note": "KlikCore2 is third-party code that is not built or run by this toolkit; review it and build it yourself.",
   "packaging": "tools/make_fusion_app.py wraps a game folder (APFS clone) + the klikcore binary + an icon extracted from the exe into a signed .app; launcher sets KLIKCORE_DISCORD=off by default. Output used: <workdir>/fnaf/apps/"
 }
