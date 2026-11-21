@@ -1,14 +1,15 @@
 #!/bin/zsh
-# mods <Game.app> install|remove|open|status: BepInEx 5 mod support for a ported (Mono) game.
+# mods <Game.app> install|remove|open|status|add <Author-Mod>...|list|del <Author-Mod>: BepInEx 5 mods for a ported (Mono) game.
 #   install  downloads the official BepInEx macOS build (pinned + checksum) into
 #            ~/Library/Application Support/metalport/mods/<bundle id>/ ; the app's launcher loads it from there.
 #   open     opens the plugins folder: put mod .dll files (or unpacked Thunderstore mods) there.
+#   add      installs Thunderstore mods with their dependencies (e.g. add Zehs-REPOLib); list / del manage them.
 #   remove   moves that mods folder to the Trash (mods and their configs included).
 # Steam Launch Options -nomods (or MP_NO_MODS=1) starts the game without mods.
 set -e
 VER=5.4.23.6; SHA=2e711e21f6570da964fce4654b1976500dbe043f61778bce0008500078564638
 ZIP="BepInEx_macos_universal_$VER.zip"; URL="https://github.com/BepInEx/BepInEx/releases/download/v$VER/$ZIP"
-APP="${1:?usage: mods <Game.app> install|remove|open|status}"; APP="${APP:A}"
+APP="${1:?usage: mods <Game.app> install|remove|open|status|add|list|del}"; APP="${APP:A}"
 ID=$(plutil -extract CFBundleIdentifier raw "$APP/Contents/Info.plist") || exit 1
 DIR="$HOME/Library/Application Support/metalport/mods/$ID"
 case "${2:-status}" in
@@ -24,5 +25,8 @@ case "${2:-status}" in
   remove) [[ -d "$DIR" ]] && mv "$DIR" "$HOME/.Trash/mods-$ID-$(date +%Y%m%d-%H%M%S)" && echo "Moved $DIR to the Trash.";;
   open)   mkdir -p "$DIR/BepInEx/plugins" && open "$DIR/BepInEx/plugins";;
   status) [[ -f "$DIR/BepInEx/core/BepInEx.Preloader.dll" ]] && { echo "on: $DIR"; ls "$DIR/BepInEx/plugins"; } || echo "off (run: mods <Game.app> install)";;
-  *) echo "usage: mods <Game.app> install|remove|open|status"; exit 1;;
+  add|list|del)
+    [[ -f "$DIR/BepInEx/core/BepInEx.Preloader.dll" ]] || { echo "Run: mods <Game.app> install first"; exit 1; }
+    python3 "${0:A:h}/thunderstore.py" "$DIR/BepInEx" "${@:2}";;
+  *) echo "usage: mods <Game.app> install|remove|open|status|add <Author-Mod>...|list|del <Author-Mod>"; exit 1;;
 esac
