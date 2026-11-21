@@ -55,6 +55,12 @@ class BufferReflection(unittest.TestCase):
         self.assertEqual(add_rdef(reflected), reflected)
 
 
+class TextureReflection(unittest.TestCase):
+    def test_array_and_multisample_dimensions_are_distinct(self):
+        for dimension, expected in ((8, 5), (4, 6), (9, 7)):
+            with self.subTest(dimension=dimension):
+                dxbc = program(instruction(88, 0x00107000, 0, 0x5555, controls=dimension << 11), instruction(62))
+                self.assertEqual(resources(dxbc)[0][2], expected)
 
 
 @unittest.skipUnless(os.environ.get('RUN_METAL_TESTS') == '1', 'Set RUN_METAL_TESTS=1 for HLSLcc + Metal checks')
@@ -80,7 +86,17 @@ class TranslatorRegression(unittest.TestCase):
         self.assertIn('uint value[12]', msl)
         self.assertIn('atomic_fetch_add_explicit', msl)
 
+    def test_array_read_preserves_slice_and_nonzero_mip(self):
+        msl = self.translate(program(
+            instruction(88, 0x00107000, 0, 0x5555, controls=8 << 11), instruction(104, 1), instruction(155, 1, 1, 1),
+            instruction(45, 0x001000f2, 0, 0x4002, 0, 0, 1, 2, 0x00107e46, 0), instruction(62)))
+        self.assertIn('tex0.read(uint2(0x0u, 0x0u), uint(0x1u), uint(0x2u))', msl)
 
+    def test_multisample_read_preserves_sample_index(self):
+        msl = self.translate(program(
+            instruction(88, 0x00107000, 0, 0x5555, controls=4 << 11), instruction(104, 1), instruction(155, 1, 1, 1),
+            instruction(46, 0x001000f2, 0, 0x4002, 0, 0, 0, 0, 0x00107e46, 0, 0x4001, 3), instruction(62)))
+        self.assertIn('tex0.read(uint2(0x0u, 0x0u), 0x3u)', msl)
 
 
 if __name__ == '__main__':

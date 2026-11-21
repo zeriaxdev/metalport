@@ -2,7 +2,7 @@
 Everything is derived from the dcl_* declarations in SHDR/SHEX."""
 import struct
 
-DIM_MAP = {1: 1, 2: 2, 3: 4, 4: 5, 5: 8, 6: 9, 7: 3, 8: 6, 9: 7, 10: 10}   # SHDR resource dim -> RDEF SRV dim
+DIM_MAP = {1: 1, 2: 2, 3: 4, 4: 6, 5: 8, 6: 9, 7: 3, 8: 5, 9: 7, 10: 10}   # SHDR resource dim -> RDEF SRV dim (2DMS != 2D array)
 
 def chunks(dx):
     n = struct.unpack_from('<I', dx, 28)[0]
