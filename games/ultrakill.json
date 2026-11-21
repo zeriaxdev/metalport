@@ -35,7 +35,7 @@
   "compute": {
     "objects": "PaletteCompute (ComputeLUT), OutlineCompute (CreateMask, JFA, Composite, Composite1PX)",
     "verified_2026_11_21": "all 5 kernels compile; ComputeLUT 512/512, CreateMask 64/64, Composite 64/64 texels match CPU references through Unity 2022.3.29f1's player on Metal (disposable clone, copied profile); JFA/Composite1PX not dispatched",
-    "gameplay": "the game's palette code (ConvertPaletteToLUT.ConvertPalette) dispatches the converted kernel without engine errors; visual parity unverified because the automated Level 0-1 baseline renders nearly black even with compute off; gameplay outlines use shader blits, not OutlineCompute",
-    "next": "check whether the installed app renders normal gameplay, then compare palette with compute on vs off in a separate copy before installing"
+    "gameplay": "the game's palette code (ConvertPaletteToLUT.ConvertPalette) dispatches the converted kernel without engine errors; visual parity unverified because the automated Level 0-1 baseline renders nearly black even with compute off; gameplay outlines use shader blits, not OutlineCompute; 2026-11-21: the user confirmed the installed app renders Level 0-1 normally, so the dark baseline is a test-harness problem (camera pose / capture), not a build problem",
+    "next": "fix the automated capture (pose, timing, which camera is read) or compare by hand: a separate copy with the converted palette kernel enabled, played side by side with the installed app, before installing"
   }
 }
