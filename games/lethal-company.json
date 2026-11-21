@@ -10,17 +10,22 @@
     "download_gb": 0.6
   },
   "supported_versions": "none",
-  "status": "not ported; coverage measured 2026-11-21: 68% of graphics programs translate, 53% compile on Metal; 112 of 122 compute shaders convert",
+  "status": "not ported; coverage measured 2026-11-21 after translator fixes: 100% of graphics programs translate, 99.2% compile on Metal; 112 of 122 compute shaders convert",
   "owner": "-",
   "known_issues": [
-    "Full HDRP compatibility and gameplay have not been validated with the current compute converter"
+    "Full HDRP compatibility and gameplay have not been validated with the current compute converter",
+    "87 graphics programs still fail Metal compilation; geometry/tessellation stages remain unsupported",
+    "10 compute objects remain unsupported or fail conversion: 6 have no kernel variants, 1 is Vulkan-only, 3 fail Metal compilation"
   ],
   "coverage_2026_11_21": {
     "build": "Unity 2022.3.62f2, Mono, HDRP; depot 1966721 manifest 6423525044216269478; 185 graphics shaders (11,188 unique programs), 122 compute shaders",
-    "graphics": "7,570 / 11,188 programs translate (68%); 5,943 compile with Metal (53%)",
-    "compute": "112 / 122 objects convert (589 kernel variants); 6 kernels are stripped from the build (no variants), 1 VR foveation (Vulkan only), 3 fail to compile (undeclared identifier, duplicate sampler)",
-    "top_causes": "3,368 translation failures are one crash in the HLSLcc translator (h2m exits on a signal), mostly HDRP/Lit, TemporalAA, CloudLayer, LayeredLit; 1,581 Metal compile failures are one codegen bug: texture .read() with an integer LOD emits 'type name requires a specifier or qualifier', mostly HDRP/Lit and FinalPass. Together about 92% of all 5,357 issues.",
+    "graphics_before": "7,570 / 11,188 programs translate (67.7%); 5,943 compile with Metal (53.1%); baseline at 17a2e3e",
+    "graphics": "11,188 / 11,188 programs translate (100%); 11,101 compile with Metal (99.2%); zero translation failures",
+    "compute": "112 / 122 objects convert (589 kernel variants), unchanged; 6 objects have no kernel variants, 1 VR foveation object is Vulkan-only, DepthOfFieldGather and DepthOfFieldTileMax reference undeclared counter buffers, DepthOfFieldCoCReproject redeclares an inline sampler",
+    "translator_fixes": "Structured SRV/UAV strides come from declaration tokens; raw/structured/typed buffer resource reflection is reconstructed instead of dereferencing missing bindings. Corrected swapped Texture2DArray/Texture2DMS RDEF dimensions preserve array index, mip level and MSAA sample index. No empty as_type templates remain in any of the 11,188 outputs.",
+    "top_causes": "87 distinct graphics programs (62 distinct MSL sources): 43 incomplete texture .read expressions in MSAA/depth-resolve paths, 28 primitive-ID/input declaration errors, 16 FurShader vertex outputs without position. Separate unsupported stages: Hidden/VR/BlitFromTex2DToTexArraySlice (geometry) and Shader Graphs/FurShader (hull/domain).",
+    "validation": "Native M5 Metal compiler; full scan completed with 115 issue occurrences (103 graphics compilation, 7 unsupported compute, 3 compute compilation, 2 unsupported-stage). Preflight remains incomplete and exits 2. Cold verification used two low-priority workers with 16-source batches to avoid the checker's 120-second batch timeout; compiler options and validation checks were unchanged. A cache-warm rerun of the ordinary xlate_all.py CLI reproduced the same translation, Metal, compute and failure totals.",
     "plugins": "steam_api64, discord_game_sdk, Dissonance (AudioPluginDissonance + opus), phonon_fmod (Steam Audio), OpenXR (VR only)",
-    "next": "fix the two translator bugs, re-run coverage; above ~95% build with --allow-incomplete and test HDRP at runtime"
+    "next": "Investigate the remaining compiler failures and HDRP/native-plugin compatibility in an isolated build; full gameplay and rendering parity are unverified"
   }
 }
