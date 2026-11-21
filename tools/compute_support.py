@@ -92,7 +92,7 @@ def info(tree):
 
 def backend_key():
     digest = hashlib.sha256((COMMIT + platform.platform()).encode())
-    for path in (HERE/'build_compute.sh', HERE/'compute_shader/dxbc2msl.cpp', HERE/'compute_shader/hlslcc-unity-player.patch'):
+    for path in (HERE/'build_compute.sh', HERE/'compute_shader/dxbc2msl.cpp', HERE/'compute_shader/hlslcc-unity-player.patch', HERE/'hlslcc-structured-stride.patch'):
         digest.update(path.read_bytes())
     return digest.hexdigest()
 

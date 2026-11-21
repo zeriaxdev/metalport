@@ -1,0 +1,20 @@
+# Shared graphics/compute stride fix, adapted from wisnuub/ror2-silicon-macos (MIT).
+# See tools/shaderconv-LICENSE.txt.
+diff --git a/src/decode.cpp b/src/decode.cpp
+index b0622b3..681aadb 100644
+--- a/src/decode.cpp
++++ b/src/decode.cpp
+@@ -751,2 +751,2 @@ const uint32_t* DecodeDeclaration(Shader* psShader, const uint32_t* pui32Token,
+-            psShader->sInfo.GetConstantBufferFromBindingPoint(RGROUP_UAV, psBinding->ui32BindPoint, &psBuffer);
+-            psDecl->ui32BufferStride = psBuffer->ui32TotalSizeInBytes;
++            // The structure stride is the instruction's last token; RDEF can be stripped (Unity player builds).
++            psDecl->ui32BufferStride = pui32Token[ui32TokenLength - 1];
+@@ -754 +754 @@ const uint32_t* DecodeDeclaration(Shader* psShader, const uint32_t* pui32Token,
+-            switch (psBinding->eType)
++            switch (psBinding ? psBinding->eType : RTYPE_UAV_RWSTRUCTURED)
+@@ -773,3 +773,2 @@ const uint32_t* DecodeDeclaration(Shader* psShader, const uint32_t* pui32Token,
+-            psShader->sInfo.GetResourceFromBindingPoint(RGROUP_TEXTURE, psDecl->asOperands[0].ui32RegisterNumber, &psBinding);
+-            psShader->sInfo.GetConstantBufferFromBindingPoint(RGROUP_TEXTURE, psBinding->ui32BindPoint, &psBuffer);
+-            psDecl->ui32BufferStride = psBuffer->ui32TotalSizeInBytes;
++            // The structure stride is the instruction's last token; RDEF can be stripped (Unity player builds).
++            psDecl->ui32BufferStride = pui32Token[ui32TokenLength - 1];

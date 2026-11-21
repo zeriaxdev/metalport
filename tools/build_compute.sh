@@ -11,7 +11,7 @@ if [ ! -f "$out/source/.patched" ]; then
         mv "$out/hlslcc.tar.gz.tmp" "$out/hlslcc.tar.gz"
     fi
     tar -xzf "$out/hlslcc.tar.gz" --strip-components=1 -C "$out/source"
-    (cd "$out/source" && patch -p1 < "$here/compute_shader/hlslcc-unity-player.patch")
+    (cd "$out/source" && patch -p1 < "$here/hlslcc-structured-stride.patch" && patch -p1 < "$here/compute_shader/hlslcc-unity-player.patch")
     touch "$out/source/.patched"
 fi
 cmake -S "$out/source" -B "$out/build" -DHLSLCC_LIBRARY_SHARED=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5

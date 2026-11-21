@@ -16,7 +16,7 @@ def parse_decls(shdr):
     ver = struct.unpack_from('<I', shdr, 0)[0]
     major = (ver >> 4) & 0xf; minor = ver & 0xf
     words = struct.unpack('<%dI' % (len(shdr)//4), shdr)
-    i = 2; cbs = {}; texs = {}; samps = {}; other = set()
+    i = 2; cbs = {}; texs = {}; samps = {}; buffers = []
     while i < len(words):
         t = words[i]; op = t & 0x7ff; ln = (t >> 24) & 0x7f
         if op == 0x35: ln = words[i + 1]      # customdata block: length lives in the next dword
@@ -24,11 +24,18 @@ def parse_decls(shdr):
         if op == 0x59:   cbs[words[i+2]] = words[i+3]                       # dcl_constantbuffer cbN[size]
         elif op == 0x58: texs[words[i+2]] = (t >> 11) & 0x1f              # dcl_resource tN, dimension
         elif op == 0x5a: samps[words[i+2]] = (t >> 11) & 0xf              # dcl_sampler sN, mode
-        elif op in (0xa1, 0xa2, 0x9e, 0x9f, 0xa3, 0xa4, 0xa5, 0xa6, 0xa7): other.add(op)  # raw/structured/UAV
+        elif op in (0x9c, 0x9d, 0x9e, 0xa1, 0xa2):  # typed/raw/structured UAVs and buffer SRVs
+            r = words[i+2]
+            ty = {0x9c: 4, 0x9d: 8, 0x9e: 6, 0xa1: 7, 0xa2: 5}[op]
+            if op == 0x9e and t & 0x800000: ty = 11  # structured UAV with counter
+            ret = words[i+ln-1] & 0xf if op == 0x9c else 6
+            dim = DIM_MAP[(t >> 11) & 0x1f] if op == 0x9c else 1
+            name = f'uav{r}' if op in (0x9c, 0x9d, 0x9e) else f'buf{r}'
+            buffers.append((name, ty, ret, dim, 0, r, 1, 0))
         i += ln
-    return major, minor, cbs, texs, samps, other
+    return major, minor, cbs, texs, samps, buffers
 
-def build_rdef(major, minor, cbs, texs, samps):
+def build_rdef(major, minor, cbs, texs, samps, buffers):
     strs = bytearray(); soff = {}
     def S(s):
         if s not in soff:
@@ -39,6 +46,7 @@ def build_rdef(major, minor, cbs, texs, samps):
     for r, n in sorted(cbs.items()):   ress.append((f'cb{r}', 0, 0, 0, 0, r, 1, 0))
     for r, d in sorted(texs.items()):  ress.append((f'tex{r}', 2, 5, DIM_MAP.get(d, 4), 0xffffffff, r, 1, 0x0c))
     for r, m in sorted(samps.items()): ress.append((f'sampler_s{r}', 3, 0, 0, 0, r, 1, 0))
+    ress.extend(buffers)
     nvar = 10 if sm5 else 6
     hdr = 28
     res_off = hdr; res_sz = 8 * 4 * len(ress)
@@ -74,8 +82,7 @@ def add_rdef(dx):
     ch = chunks(dx)
     if any(f == b'RDEF' for f, _ in ch): return dx
     shdr = next(d for f, d in ch if f in (b'SHDR', b'SHEX'))
-    major, minor, cbs, texs, samps, other = parse_decls(shdr)
-    rdef = (b'RDEF', build_rdef(major, minor, cbs, texs, samps))
+    rdef = (b'RDEF', build_rdef(*parse_decls(shdr)))
     new = [rdef] + [(f, d) for f, d in ch]
     n = len(new); off = 32 + 4 * n; body = b''; offs = []
     for f, d in new:

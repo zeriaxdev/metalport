@@ -3,6 +3,7 @@ ports/
 *.dylib
 *.a
 tools/cache/
+tools/.build/
 tools/h2m
 __pycache__/
 *.bak
