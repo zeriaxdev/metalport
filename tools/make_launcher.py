@@ -3,7 +3,8 @@
 tools/launch.sh does (Metal HUD, tweaks + Steam overlay injection, Steam app id, player log, first-run shader warm-up) and checks Steam:
   * Steam not running -> dialog, start Steam, wait for sign-in;
   * the game quits because Steam could not confirm ownership -> dialog saying so.
-Metal HUD is off; Steam Launch Options `-hud` (or HUD=1 in the environment) turns it on.  Environment set by the caller wins
+Metal HUD is off; Steam Launch Options `-hud` (or HUD=1 in the environment) turns it on. BepInEx mods load when tools/mods installed
+them (~/Library/Application Support/metalport/mods/<bundle id>); `-nomods` or MP_NO_MODS=1 skips them.  Environment set by the caller wins
 (tests can pass MP_NO_ACTIVATE etc.; NO_OVERLAY=1 still works).
 usage: make_launcher.py <App.app> --appid <steam app id> [--title "Display Name"]   then re-sign the app."""
 import argparse, os, plistlib, stat
@@ -23,12 +24,17 @@ if ! pgrep -x steam_osx >/dev/null; then
   tail -n +$((before + 1)) "$STEAM_LOG" 2>/dev/null | grep -q 'Logged On' || { say "Steam didn't finish signing in. Sign in to Steam, then open $TITLE again." '"OK"' >/dev/null; exit 0; }
 fi
 export SteamAppId=$APPID SteamGameId=$APPID SteamOverlayGameId=$APPID SteamMetalHook=1
-args=(); for a in "$@"; do [[ "$a" == -hud || "$a" == HUD=1 ]] && HUD=1 || args+=("$a"); done; set -- "${args[@]}"   # Steam Launch Options: -hud
+args=(); for a in "$@"; do case "$a" in -hud|HUD=1) HUD=1;; -nomods) MP_NO_MODS=1;; *) args+=("$a");; esac; done; set -- "${args[@]}"   # Steam Launch Options: -hud, -nomods
 [[ -n "$HUD" ]] && export MTL_HUD_ENABLED=1
 export MP_MOUSE_SCALE=${MP_MOUSE_SCALE:-2.5}
 INJ="$C/Plugins/metalport_tweaks.dylib"; [[ -f "$INJ" ]] || INJ=""
 OVL="$HOME/Library/Application Support/Steam/Steam.AppBundle/Steam/Contents/MacOS/gameoverlayrenderer.dylib"
 [[ -z "$NO_OVERLAY" && -f "$OVL" ]] && INJ="${INJ:+$INJ:}$OVL"
+MODS="${MP_MODS_DIR:-$HOME/Library/Application Support/metalport/mods/$(/usr/bin/plutil -extract CFBundleIdentifier raw "$C/Info.plist")}"
+if [[ -z "$MP_NO_MODS" && -f "$MODS/BepInEx/core/BepInEx.Preloader.dll" && -f "$MODS/libdoorstop.dylib" ]]; then   # BepInEx (tools/mods)
+  export DOORSTOP_ENABLED=1 DOORSTOP_TARGET_ASSEMBLY="$MODS/BepInEx/core/BepInEx.Preloader.dll" DOORSTOP_IGNORE_DISABLED_ENV=0
+  INJ="$MODS/libdoorstop.dylib${INJ:+:$INJ}"
+fi
 [[ -n "$INJ" ]] && export DYLD_INSERT_LIBRARIES="$INJ"
 LOGDIR="$HOME/Library/Logs/metalport"; mkdir -p "$LOGDIR"; export MP_LOG="${MP_LOG:-$LOGDIR/$EXE.log}"
 [[ -f "$MP_LOG" ]] && mv -f "$MP_LOG" "${MP_LOG%.log}.prev.log"

@@ -1,0 +1,28 @@
+#!/bin/zsh
+# mods <Game.app> install|remove|open|status: BepInEx 5 mod support for a ported (Mono) game.
+#   install  downloads the official BepInEx macOS build (pinned + checksum) into
+#            ~/Library/Application Support/metalport/mods/<bundle id>/ ; the app's launcher loads it from there.
+#   open     opens the plugins folder: put mod .dll files (or unpacked Thunderstore mods) there.
+#   remove   moves that mods folder to the Trash (mods and their configs included).
+# Steam Launch Options -nomods (or MP_NO_MODS=1) starts the game without mods.
+set -e
+VER=5.4.23.6; SHA=2e711e21f6570da964fce4654b1976500dbe043f61778bce0008500078564638
+ZIP="BepInEx_macos_universal_$VER.zip"; URL="https://github.com/BepInEx/BepInEx/releases/download/v$VER/$ZIP"
+APP="${1:?usage: mods <Game.app> install|remove|open|status}"; APP="${APP:A}"
+ID=$(plutil -extract CFBundleIdentifier raw "$APP/Contents/Info.plist") || exit 1
+DIR="$HOME/Library/Application Support/metalport/mods/$ID"
+case "${2:-status}" in
+  install)
+    CACHE="$HOME/Library/Caches/metalport"; mkdir -p "$CACHE"
+    [[ -f "$CACHE/$ZIP" ]] || curl -fsSL -o "$CACHE/$ZIP" "$URL"
+    echo "$SHA  $CACHE/$ZIP" | shasum -a 256 -c - >/dev/null || { echo "Checksum mismatch for $ZIP; nothing installed"; rm -f "$CACHE/$ZIP"; exit 1; }
+    TMP=$(mktemp -d); unzip -q "$CACHE/$ZIP" -d "$TMP"
+    mkdir -p "$DIR/BepInEx/plugins" "$DIR/BepInEx/config" "$DIR/BepInEx/patchers"
+    rm -rf "$DIR/BepInEx/core"; cp -R "$TMP/BepInEx/core" "$DIR/BepInEx/core"; cp "$TMP/libdoorstop.dylib" "$DIR/"
+    codesign --force -s - "$DIR/libdoorstop.dylib" 2>/dev/null; rm -rf "$TMP"
+    echo "BepInEx $VER installed for $ID. Mods go in: $DIR/BepInEx/plugins";;
+  remove) [[ -d "$DIR" ]] && mv "$DIR" "$HOME/.Trash/mods-$ID-$(date +%Y%m%d-%H%M%S)" && echo "Moved $DIR to the Trash.";;
+  open)   mkdir -p "$DIR/BepInEx/plugins" && open "$DIR/BepInEx/plugins";;
+  status) [[ -f "$DIR/BepInEx/core/BepInEx.Preloader.dll" ]] && { echo "on: $DIR"; ls "$DIR/BepInEx/plugins"; } || echo "off (run: mods <Game.app> install)";;
+  *) echo "usage: mods <Game.app> install|remove|open|status"; exit 1;;
+esac
