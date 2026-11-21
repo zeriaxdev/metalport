@@ -1,6 +1,5 @@
 # the game and Valve/Unity binaries never go in git
-R.E.P.O.app/
-Resources
+ports/
 *.dylib
 *.a
 tools/cache/

@@ -46,7 +46,7 @@ codesign --force --deep -s - work/out/Game.app
 tools/launch.sh work/out Game <steam app id>
 ```
 
-R.E.P.O. is wired up already: double-click `R.E.P.O.app` (not in git; `./run.sh` opens it too).
+Built apps live in `ports/` (git-ignored), e.g. `ports/R.E.P.O.app`: open them like any app, or with Steam's Play button (`tools/steam_entry.py`).
 
 ## Layout
 
@@ -57,8 +57,8 @@ R.E.P.O. is wired up already: double-click `R.E.P.O.app` (not in git; `./run.sh`
 | `tools/assemble_app.py` | builds the `.app`: player, class-library swap, BuildSettings, Addressables fix |
 | `tools/xlate_all.py`, `dxbc_rdef.py`, `h2m.cpp`, `build_hlslcc.sh` | DX11 bytecode → Metal source (Unity's own open-source HLSLcc) |
 | `tools/inject.py`, `inject_inplace.py`, `metalsub.py` | writes the Metal variants into the game's `Shader` objects |
-| `tools/natives.py` + `*.c`, `repo_tweaks.m` | Steam / Discord / Photon-voice / mouse / warm-up stand-ins |
-| `tools/launch.sh`, `run.sh` | launchers |
+| `tools/natives.py` + `*.c`, `tweaks.m` | Steam / Discord / Photon-voice / mouse / warm-up stand-ins |
+| `tools/launch.sh`, `tools/make_launcher.py`, `tools/steam_entry.py` | launchers: command line, double-click `.app`, Steam Play button and Steam Cloud |
 | `docs/` | feature and game support list, how it works, porting guide, older-Unity path, per-game notes |
 | `games/` | per-game data (Steam ids, depot manifests = supported versions, status, issues) for R.E.P.O., ULTRAKILL, Lethal Company |
 

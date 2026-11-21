@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.0 (2026-11-21)
+- Project renamed **metalport**. Generic names everywhere: launcher/tweaks settings `REPO_*` are now `MP_*` (`MP_LOG`, `MP_INVOKE`,
+  `MP_NO_ACTIVATE`, `MP_MOUSE_SCALE`, `MP_WARMUP`), the tweaks library is `metalport_tweaks.dylib` (`tools/tweaks.m`), logs and support
+  files live in `~/Library/Logs/metalport` and `~/Library/Application Support/metalport`. Rebuild existing apps with
+  `natives.py --tweaks` and `make_launcher.py`.
+- Built apps go in `ports/` (git-ignored). Removed R.E.P.O.-only `run.sh` and `steam_appid.txt`.
+- Clickteam Fusion (FNAF) packaging moved out: this toolkit is for Unity games only.
+- Steam Cloud for native saves (`steam_entry.py --cloud`), Metal HUD opt-in (`-hud`), docs/FEATURES.md, third-party notices.
+
 ## 0.5.0 (2026-11-21)
 - R.E.P.O.: post-processing on (bloom, lens distortion, chromatic aberration, grain, vignette, AO, motion blur); corner square fixed.
   Color grading stays off for now (HDR LUT baker bakes a constant LUT on Metal; see docs/GAME-NOTES-REPO.md).
