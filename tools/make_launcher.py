@@ -4,7 +4,8 @@ tools/launch.sh does (Metal HUD, tweaks + Steam overlay injection, Steam app id,
   * Steam not running -> dialog, start Steam, wait for sign-in;
   * the game quits because Steam could not confirm ownership -> dialog saying so.
 Metal HUD is off; Steam Launch Options `-hud` (or HUD=1 in the environment) turns it on. BepInEx mods load when tools/mods installed
-them (~/Library/Application Support/metalport/mods/<bundle id>); `-nomods` or MP_NO_MODS=1 skips them.  Environment set by the caller wins
+them (~/Library/Application Support/metalport/mods/<bundle id>); if a mod manager (r2modmac) applied a BepInEx folder to the game's
+Steam install folder, those mods are used instead, with the tools/mods BepInEx core. `-nomods` or MP_NO_MODS=1 skips mods.  Environment set by the caller wins
 (tests can pass MP_NO_ACTIVATE etc.; NO_OVERLAY=1 still works).
 usage: make_launcher.py <App.app> --appid <steam app id> [--title "Display Name"]   then re-sign the app."""
 import argparse, os, plistlib, stat
@@ -31,8 +32,17 @@ INJ="$C/Plugins/metalport_tweaks.dylib"; [[ -f "$INJ" ]] || INJ=""
 OVL="$HOME/Library/Application Support/Steam/Steam.AppBundle/Steam/Contents/MacOS/gameoverlayrenderer.dylib"
 [[ -z "$NO_OVERLAY" && -f "$OVL" ]] && INJ="${INJ:+$INJ:}$OVL"
 MODS="${MP_MODS_DIR:-$HOME/Library/Application Support/metalport/mods/$(/usr/bin/plutil -extract CFBundleIdentifier raw "$C/Info.plist")}"
-if [[ -z "$MP_NO_MODS" && -f "$MODS/BepInEx/core/BepInEx.Preloader.dll" && -f "$MODS/libdoorstop.dylib" ]]; then   # BepInEx (tools/mods)
-  export DOORSTOP_ENABLED=1 DOORSTOP_TARGET_ASSEMBLY="$MODS/BepInEx/core/BepInEx.Preloader.dll" DOORSTOP_IGNORE_DISABLED_ENV=0
+ROOT="$MODS"                                                   # BepInEx: tools/mods folder, or a mod manager's (r2modmac) game folder
+ACF="$HOME/Library/Application Support/Steam/steamapps/appmanifest_$APPID.acf"
+if [[ -f "$ACF" ]]; then
+  G="$HOME/Library/Application Support/Steam/steamapps/common/$(sed -n 's/.*"installdir"[[:space:]]*"\(.*\)"/\1/p' "$ACF")"
+  [[ -d "$G/BepInEx/plugins" ]] && ROOT="$G"                   # mods applied there by r2modmac / r2modman-style managers
+fi
+if [[ -z "$MP_NO_MODS" && -f "$MODS/BepInEx/core/BepInEx.Preloader.dll" && -f "$MODS/libdoorstop.dylib" && -d "$ROOT/BepInEx" ]]; then
+  if [[ "$ROOT" != "$MODS" ]] && ! cmp -s "$MODS/BepInEx/core/BepInEx.Preloader.dll" "$ROOT/BepInEx/core/BepInEx.Preloader.dll"; then
+    rm -rf "$ROOT/BepInEx/core"; cp -R "$MODS/BepInEx/core" "$ROOT/BepInEx/core"   # use the Apple Silicon-fixed BepInEx core
+  fi
+  export DOORSTOP_ENABLED=1 DOORSTOP_TARGET_ASSEMBLY="$ROOT/BepInEx/core/BepInEx.Preloader.dll" DOORSTOP_IGNORE_DISABLED_ENV=0
   INJ="$MODS/libdoorstop.dylib${INJ:+:$INJ}"
 fi
 [[ -n "$INJ" ]] && export DYLD_INSERT_LIBRARIES="$INJ"
