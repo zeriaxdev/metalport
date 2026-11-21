@@ -2,86 +2,69 @@
 
 *Native Apple Silicon ports of Windows Unity games.*
 
-Run a **Windows-only Unity game natively on Apple Silicon with Metal** — no Rosetta, no Wine/CrossOver — by wrapping the game's
-existing Windows data in a macOS Unity player and translating its shaders from Direct3D 11 to Metal.
-
-Ported so far: **R.E.P.O.** (playable, ~110-130 fps at 3024x1898 on an Apple M5, Steam overlay; see multiplayer/voice limits in the feature list) and **Outer Wilds**
-(playable with one rendering issue). **What works, what doesn't, and which games are supported: [docs/FEATURES.md](docs/FEATURES.md).**
+metalport runs a **Windows-only Unity game natively on Apple Silicon with Metal**, without Rosetta, Wine or CrossOver. It wraps the
+game's own Windows data in Unity's Mac player and translates its shaders from Direct3D 11 to Metal, once, when building.
 
 > **Notice.** This independent project is not affiliated with, endorsed by, or sponsored by Unity Technologies, Valve, Discord, or any game
-> developer or publisher. It contains no game files and no Unity or Valve binaries: those come from your own downloads, on your own Mac
-> (the Unity player from Unity's official download service, the game from your own Steam library). You must own each game you port and
-> comply with its license terms; do not share the result. The toolkit's MIT license covers only this toolkit, not game content, engine
-> runtimes or other third-party software (see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)). Product names and trademarks belong to
-> their respective owners.
+> developer or publisher. It contains no game files and no Unity or Valve binaries: those come from your own downloads, on your own Mac.
+> You must own each game you port and comply with its license terms; do not share the result. The MIT license covers only this toolkit
+> (see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)). Product names and trademarks belong to their respective owners.
 
-## Does it work for my game?
+## Status
 
-| Requirement | Why |
+| Game | State |
 |---|---|
-| Unity **Mono** build with managed game-code DLLs | This toolkit handles data and managed IL; it does not translate IL2CPP's native Windows game code |
-| Windows build on **Direct3D 11** shaders (typical) | Shaders are translated from DX11 bytecode |
-| **Built-in / URP** style rendering | Vertex/pixel shaders and selected Unity 2021/2022 compute formats convert; full HDRP, geometry and tessellation remain unsupported. URP gameplay still needs validation |
-| A compatible macOS Apple-Silicon player | Use the exact Unity version for the normal route. Unity 2019.x–2020.1 needs the separate [legacy migration](docs/LEGACY-UNITY.md) |
+| R.E.P.O. | ✅ Playable: ~110–130 fps at 3024×1898 (M5), Steam overlay, online hosting, Steam Cloud, mods |
+| Outer Wilds | ◐ Playable with one rendering issue |
+| ULTRAKILL | ◐ In progress |
+| Lethal Company | ❌ Not ported (HDRP; shader coverage measured) |
 
-Details and the go/no-go checklist: [docs/PORTING-A-NEW-GAME.md](docs/PORTING-A-NEW-GAME.md).
+Full feature list, limits and verified versions: **[docs/FEATURES.md](docs/FEATURES.md)**.
 
-## One command
+## Does my game qualify?
+
+- **Unity with Mono** (the game folder has `<Game>_Data/Managed/*.dll`). IL2CPP and Unreal games can't be ported this way.
+- **Unity 2020.2 or newer.** Unity 2019–2020.1 needs the [legacy path](docs/LEGACY-UNITY.md).
+- **Built-in or URP rendering.** HDRP isn't supported yet.
+
+`tools/metalport` checks all of this first and stops with a plain reason.
+
+## Quick start
+
+Requirements: Apple Silicon Mac, Xcode command line tools, Python 3, CMake, Steam with the game in your library.
 
 ```sh
-tools/metalport port <steam app id | game folder> [--steam-play] [--mods] [-v]
+tools/metalport port <steam app id | game folder>
 ```
 
-Runs every step below (go/no-go check, Unity player download, shader translation + Metal compile checks, native stand-ins,
-launcher, signing; optionally the Steam Play button + Cloud and BepInEx) and writes `ports/<Game>/<Game>.app`. One status line per
-step; `-v` streams all tool output. Each run leaves a full log and a JSON summary in `~/Library/Logs/metalport/`. It stops with a
-plain reason when a game can't be ported (IL2CPP, Unity before 2020.2, shader gaps unless `--allow-incomplete`).
+Writes `ports/<Game>/<Game>.app`, one status line per step. Useful options:
 
-## Quick start (macOS, Apple Silicon)
-
-The same steps by hand:
-
-```sh
-# 0. prerequisites: Xcode command line tools, cmake, python3, (brew install opus for voice games)
-python3 -m venv .venv && .venv/bin/pip install UnityPy lz4 dnfile
-
-# 1. get the Unity pieces for the game's exact Unity version (find it with: strings <Game>_Data/globalgamemanagers | head -1)
-.venv/bin/python tools/fetch_unity.py 6000.3.28f1 work/unity          # ~0.7 GB download + ~5 GB streamed, ~100 MB kept
-
-# 2. build + patch (game data stays untouched; the .app gets APFS-cloned copies)
-.venv/bin/python tools/port.py --data "<path to Game_Data>" --unity work/unity --out work/out --name Game
-
-# 3. native stand-ins for Windows-only plugins, then sign
-# Select the flags your game needs; --discord and --voice are additional per-game integrations.
-.venv/bin/python tools/natives.py --app work/out/Game.app --tweaks --steam
-codesign --force --deep -s - work/out/Game.app
-
-# 4. double-click launcher (Steam checks, overlay, first-run shader warm-up; Steam Launch Options -hud shows the Metal HUD)
-.venv/bin/python tools/make_launcher.py work/out/Game.app --appid <steam app id> && codesign --force --deep -s - work/out/Game.app
-
-# 5. optional: green Play button in Steam's own library entry + Steam Cloud for the saves (quits and reopens Steam)
-tools/steam-play work/out/Game.app
-
-# 6. optional: BepInEx mods (then: tools/mods work/out/Game.app open, drop mod .dll files in, and start with -mods)
-tools/mods work/out/Game.app install
-```
-
-The example writes `work/out/Game.app`; `--out` controls the location. Local tested ports are kept under `ports/` (git-ignored), e.g. `ports/R.E.P.O.app`.
-Default preflight stops on unsupported or failed shader variants. Explicit incomplete experiments remain unverified for rendering; see [SHADER-CHECKS.md](docs/SHADER-CHECKS.md).
-
-## Layout
-
-| Path | What |
+| Option | Effect |
 |---|---|
-| `tools/fetch_unity.py` | downloads Unity's Mac player module + streams the macOS Mono class libraries |
-| `tools/port.py` | orchestrates assemble → translate → inject |
-| `tools/assemble_app.py` | builds the `.app`: player, class-library swap, BuildSettings, Addressables fix |
-| `tools/xlate_all.py`, `dxbc_rdef.py`, `h2m.cpp`, `build_hlslcc.sh` | DX11 bytecode → Metal source (Unity's own open-source HLSLcc) |
-| `tools/inject.py`, `inject_inplace.py`, `metalsub.py` | writes the Metal variants into the game's `Shader` objects |
-| `tools/natives.py` + `*.c`, `tweaks.m` | Steam / Discord / Photon-voice / mouse / warm-up stand-ins |
-| `tools/launch.sh`, `tools/make_launcher.py`, `tools/steam_entry.py` | launchers: command line, double-click `.app`, Steam Play button and Steam Cloud |
-| `docs/` | feature and game support list, how it works, porting guide, older-Unity path, per-game notes |
-| `games/` | per-game data (Steam ids, depot manifests = supported versions, status, issues) for R.E.P.O., ULTRAKILL, Lethal Company |
+| `--steam-play` | green Play button in Steam's own library entry + Steam Cloud for saves |
+| `--mods` | installs BepInEx for mods |
+| `--allow-incomplete` | builds even if some shaders can't be translated |
+| `-v` | shows every tool's output |
 
-## Status and versions
-See [CHANGELOG.md](CHANGELOG.md). Current: see [VERSION](VERSION).
+Each run leaves a full log and a JSON summary in `~/Library/Logs/metalport/`. The manual steps behind it are in
+[docs/PIPELINE.md](docs/PIPELINE.md) and [docs/PORTING-A-NEW-GAME.md](docs/PORTING-A-NEW-GAME.md).
+
+## Playing
+
+- **Start** the app by double-click or Steam's Play button. Steam must be running and signed in to the account that owns the game.
+- **Metal HUD** (fps, GPU time): add `-hud` to the game's Steam Launch Options.
+- **Mods** are off unless asked for: install them with [r2modmac](https://github.com/Zard-Studios/r2modmac) ("Apply to Game") or
+  `tools/mods <app> add <Author-Mod>`, then add `-mods` to Steam's Launch Options.
+
+## Documentation
+
+| Doc | Contents |
+|---|---|
+| [FEATURES.md](docs/FEATURES.md) | what works, what doesn't, supported games and versions |
+| [PIPELINE.md](docs/PIPELINE.md) | how a port works, step by step |
+| [PORTING-A-NEW-GAME.md](docs/PORTING-A-NEW-GAME.md) | go/no-go checklist, debugging |
+| [LEGACY-UNITY.md](docs/LEGACY-UNITY.md) | Unity 2019 games on the 2021 player |
+| [COMPUTE-SHADERS.md](docs/COMPUTE-SHADERS.md), [SHADER-CHECKS.md](docs/SHADER-CHECKS.md) | shader translation and coverage checks |
+| `GAME-NOTES-*.md`, [games/](games) | per-game notes and data |
+
+Changes: [CHANGELOG.md](CHANGELOG.md). License: [MIT](LICENSE).
