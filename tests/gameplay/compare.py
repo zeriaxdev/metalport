@@ -80,15 +80,17 @@ def main():
     live = [p for folder in [profile / 'Saves', profile / 'Preferences'] for p in folder.rglob('*') if p.is_file() and not p.is_symlink()]
     hashes = {str(p): digest(p) for p in protected_files + live if p.is_file()}
     (output / 'original-hashes.json').write_text(json.dumps(hashes, indent=2) + '\n')
+    seed = output / 'profile-seed'
+    seed.mkdir()
+    for name in ('Saves', 'Preferences', 'Cybergrind', 'Palettes'):
+        original = profile / name
+        if original.exists():
+            if original.is_symlink() or any(p.is_symlink() for p in original.rglob('*')):
+                raise ValueError('Profile content contains symlinks; use a regular copied profile')
+            shutil.copytree(original, seed / name)
     for mode in ('off', 'on'):
         copied = output / ('profile-' + mode)
-        copied.mkdir()
-        for name in ('Saves', 'Preferences', 'Cybergrind', 'Palettes'):
-            original = profile / name
-            if original.exists():
-                if original.is_symlink() or any(p.is_symlink() for p in original.rglob('*')):
-                    raise ValueError('Profile content contains symlinks; use a regular copied profile')
-                shutil.copytree(original, copied / name)
+        shutil.copytree(seed, copied)
         prefs = copied / 'Preferences/LocalPrefs.json'
         prefs.parent.mkdir(exist_ok=True)
         values = json.loads(prefs.read_text()) if prefs.is_file() else {}
@@ -115,7 +117,7 @@ def main():
         subprocess.run(['dotnet', 'build', str(HERE / project), '-c', 'Release', '--nologo', '--ignore-failed-sources',
                         '-p:NuGetAudit=false', '-p:UseSharedCompilation=false', '-nodeReuse:false',
                         '-p:BaseIntermediateOutputPath=' + str(output / 'build' / (name + '-obj')) + '/',
-                        '-p:TargetFramework=' + target, '-p:GameManagedPath=' + str(managed),
+                        '-p:GameplayTargetFramework=' + target, '-p:GameManagedPath=' + str(managed),
                         '-o', str(output / 'build' / name)], env=build_env, check=True)
     subprocess.run(['dotnet', str(output / 'build/patch/Patch.dll'), str(managed / 'Assembly-CSharp.dll'),
                     str(output / 'build/probe/GameplayProbe.dll'), str(output)], env=build_env, check=True)
