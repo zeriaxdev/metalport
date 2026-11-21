@@ -18,9 +18,13 @@
   atmosphere rim and emissive storms show; the sun-lit cloud surface is black (it should look like a full moon).
 * All planet/cloud/atmosphere/fog shaders have full Metal coverage. Not the cause: float3 overwrites (audited), eye adaptation
   (off by default in every camera; turning it on blacks the screen because its compute shader is untranslated: harmless).
-* Next suspects: (1) `PlanetaryFogImageEffect` fogging the whole disk with the night fog colour (test: `comp PlanetaryFogImageEffect 0`
-  while the planet is in view); (2) shadow fade at 7.7 km (`_LightShadowData`, `unity_ShadowFadeCenterAndType`) leaving the
-  surface fully shadowed.
+* Confirmed 2026-11-21 (user in game): the black disk is Giant's Deep (`where GiantsDeep_Body`: screen centre, 7.5 km, fully sun-facing);
+  the Windows game shows it as a lit green disk. Ruled out live: planetary fog (`comp PlanetaryFogImageEffect 0` changes nothing).
+* Next suspects, in order: (1) shadow fade at 7.5 km (`_LightShadowData`, `unity_ShadowFadeCenterAndType`) leaving the far surface
+  fully shadowed: test by switching shadows off live (`shadows 0`) while looking at it; (2) the far proxy `Clouds_Proxy/CloudsTopLayer_GD (1)`
+  (same `Cloud Layer Top` shader) reading a built-in lighting constant that the 2021 player fills differently; a Metal frame capture of
+  that draw settles it.
 * Test harness: `UnityCompat.Diag` commands `call PlayerCameraEffectController WakeUp`, `call PlayerCameraController SetDegreesY 75`,
-  `find GiantsDeep`, `comp <Type> 0|1`, `dump <dir>`. Calling WakeUp from outside is unreliable (worked 3 of 5 runs); the planet is
+  `find GiantsDeep`, `where <Body>`, `comp <Type> 0|1`, `dump <dir>`. Run the game through the title screen (not `DIAG_MODE=game`: that skips
+  profile and time-loop setup and the player dies instantly). Calling WakeUp from outside is unreliable (worked 3 of 5 runs); the planet is
   overhead roughly 4 minutes into a loop.

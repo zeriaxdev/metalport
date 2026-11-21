@@ -174,6 +174,14 @@ namespace UnityCompat
                         }
                         Debug.Log($"[diag] find {w[1]}: {n} visible");
                     }
+                    if (w[0] == "where")                                            // where <root name>: screen position (viewport 0..1) of that body from the main camera
+                    {
+                        var wc = Camera.main; var go = GameObject.Find(w[1]);
+                        if (!go || !wc) Debug.Log($"[diag] where {w[1]}: not found");
+                        else { var vp = wc.WorldToViewportPoint(go.transform.position); var sun = GameObject.Find("Sun_Body");
+                               var lit = sun ? Vector3.Dot((sun.transform.position - go.transform.position).normalized, (wc.transform.position - go.transform.position).normalized) : 0f;
+                               Debug.Log($"[diag] where {w[1]} viewport=({vp.x:F2},{vp.y:F2}) dist={vp.z:F0} onscreen={(vp.z > 0 && vp.x > 0 && vp.x < 1 && vp.y > 0 && vp.y < 1)} sunFacingUs={lit:F2} cam={wc.name}"); }
+                    }
                     if (w[0] == "res") Screen.SetResolution(int.Parse(w[1]), int.Parse(w[2]), Screen.fullScreenMode);
                     if (w[0] == "shadows") QualitySettings.shadows = w[1] == "0" ? ShadowQuality.Disable : ShadowQuality.All;
                     if (w[0] == "comp") foreach (var b in Object.FindObjectsOfType<MonoBehaviour>()) if (b.GetType().Name == w[1]) b.enabled = w[2] == "1";
