@@ -13,6 +13,7 @@ which terms; it is not a substitute for those terms.
 | TypeTreeGenerator | type trees for older Unity data (`tools/legacy/`) | MIT | https://github.com/K0lb3/TypeTreeGenerator |
 | dnfile | reading .NET metadata | MIT | https://github.com/malwarefrank/dnfile |
 | python-lz4 | Unity data compression | BSD-3-Clause | https://github.com/python-lz4/python-lz4 |
+| ror2-silicon-macos (commit `9c40375`) | adapted into `tools/compute_shader/` (RDEF reconstruction, Metal layout helpers, compute payload construction, reflection driver, HLSLcc patch) and `tools/mslcheck.m` | MIT, copyright 2026 wisnuub; full text in `tools/shaderconv-LICENSE.txt` | https://github.com/wisnuub/ror2-silicon-macos |
 | Mono.Cecil 0.11.6 | `tools/ilfix`: .NET IL rewriting | MIT | https://github.com/jbevain/cecil |
 
 ## Components copied into the app you build (never shipped by this repository)
