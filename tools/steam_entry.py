@@ -27,6 +27,7 @@ APP_ID = 0
 NAME = ""
 EXE = ""
 ARGS = ""
+CLOUD = False
 STEAM = Path.home() / "Library/Application Support/Steam"
 DEFAULT_APP = FOLDER_NAME = LAUNCH_EXE = None
 
@@ -213,6 +214,22 @@ def app_archs(app: Path) -> set:
     return set(result.stdout.split())
 
 
+def cloud_overrides(app_tree: dict, bundle_id: str) -> dict:
+    """Steam Auto-Cloud rules for the Mac app: each Windows save root becomes ~/Library/Application Support/<bundle id>
+    (a Unity Mac player keeps persistentDataPath there), replacing the leading "<Company>/<Product>" of each save path.
+    Same shape as Mac releases use (e.g. Papers, Please: root/os/oscompare/useinstead/pathtransforms)."""
+    ufs = app_tree.get("ufs", (0, {}))[1]
+    out = {}
+    for _, (_t, rule) in ufs.get("savefiles", (0, {}))[1].items():
+        root, path = rule.get("root", (1, ""))[1], rule.get("path", (1, ""))[1]
+        if not root.startswith("WinAppData") or path.count("/") < 1 or root in out:
+            continue
+        find = "/".join(path.split("/")[:2])
+        out[root] = (0, {"os": (1, "macos"), "oscompare": (1, "="), "root": (1, root), "useinstead": (1, "MacAppSupport"),
+                         "pathtransforms": (0, {"1": (0, {"find": (1, find), "replace": (1, bundle_id)})})})
+    return out
+
+
 def installed_depots(depots: dict) -> dict:
     """Depots without an OS restriction now also apply to macOS: record them as installed at the public manifest,
     or Steam marks the app "Update Required" and downloads the Windows files on the first Play."""
@@ -276,6 +293,15 @@ def add(app: Path = DEFAULT_APP, steam: Path = STEAM) -> str:
             flags.append(flag)
             receipt["osextended"].append(flag)
     common["osextended"] = (1, ",".join(flags))
+    if CLOUD:                                                   # Steam Cloud for the native saves (receipt-tracked)
+        import plistlib
+        bundle = plistlib.loads((app / "Contents/Info.plist").read_bytes())["CFBundleIdentifier"]
+        ufs = app_tree.setdefault("ufs", (0, {}))[1]
+        ro = ufs.setdefault("rootoverrides", (0, {}))[1]
+        for k in receipt.get("cloud_keys", []): ro.pop(k, None)
+        receipt["cloud_keys"] = []
+        for i, rule in enumerate(cloud_overrides(app_tree, bundle).values()):
+            k = f"mp{i}"; ro[k] = rule; receipt["cloud_keys"].append(k)
     for key in [k for k, entry in launch.items() if ours(entry)]:   # re-add fresh: picks up a new label / arguments
         del launch[key]
     launch[str(max(map(int, launch), default=-1) + 1)] = (0, {
@@ -320,6 +346,8 @@ def remove(steam: Path = STEAM) -> str:
             if entry.get("executable", (1, ""))[1] in receipt.get("windows_only", []) and cfg.get("oslist", (1, ""))[1] == "windows":
                 del cfg["oslist"]
                 if not cfg: del entry["config"]
+        ro = tree["appinfo"][1].get("ufs", (0, {}))[1].get("rootoverrides", (0, {}))[1]
+        for k in receipt.get("cloud_keys", []): ro.pop(k, None)
         if receipt["oslist"] and "oslist" in common:
             common["oslist"] = (1, ",".join(s for s in common["oslist"][1].split(",") if s and s != "macos"))
         if "osextended" in common:
@@ -357,8 +385,8 @@ def status(steam: Path = STEAM) -> str:
 
 def main(argv: list) -> int:
     import argparse
-    ap = argparse.ArgumentParser(); ap.add_argument("--appid", type=int, required=True); ap.add_argument("--name", required=True); ap.add_argument("--exe", default=""); ap.add_argument("--args", default="", help="launch arguments Steam passes to the app")
-    ap.add_argument("rest", nargs="*"); a = ap.parse_args(argv[1:]); configure(a.appid, a.name, a.exe, a.args); argv = [argv[0]] + a.rest
+    ap = argparse.ArgumentParser(); ap.add_argument("--appid", type=int, required=True); ap.add_argument("--name", required=True); ap.add_argument("--exe", default=""); ap.add_argument("--args", default="", help="launch arguments Steam passes to the app"); ap.add_argument("--cloud", action="store_true", help="also map Steam Cloud saves to ~/Library/Application Support/<bundle id>")
+    ap.add_argument("rest", nargs="*"); a = ap.parse_args(argv[1:]); configure(a.appid, a.name, a.exe, a.args); globals()["CLOUD"] = a.cloud; argv = [argv[0]] + a.rest
     command = argv[1] if len(argv) > 1 else "status"
     try:
         if command == "add":

@@ -42,7 +42,7 @@ not done. ⛔ **Out of scope**: not possible with this approach.
 | Double-click launcher with Steam checks | ✅ Works | Dialogs for "Steam not running" and "Steam couldn't confirm ownership". |
 | Steam library Play button for the Mac app | ✅ Works | `steam_entry.py`; Steam must be closed while it runs; may need re-running after a game update. |
 | Metal HUD on demand | ✅ Works | Steam Launch Options `-hud`, or `HUD=1`. |
-| Steam Cloud for native saves | ❌ Not yet | Native saves are local only. |
+| Steam Cloud for native saves | ✅ Works | `steam_entry.py --cloud`: adds a macOS root override so Steam syncs `~/Library/Application Support/<bundle id>` with the Windows save folder. Back up saves first: the first sync replaces local files that differ from the cloud. |
 | Mods (BepInEx) | ❌ Not yet | Needs the macOS Doorstop loader. |
 | One-step installer from your own Steam copy | ❌ Not yet | Today: the commands in the README. |
 
@@ -72,6 +72,5 @@ Details per game: [games/](../games).
 
 1. One-step installer: build, install, Play button and cleanup from your own Steam copy.
 2. Post-processing v2 color grading on Metal.
-3. Steam Cloud for native saves.
-4. Mods via BepInEx.
-5. HDRP (Lethal Company).
+3. Mods via BepInEx.
+4. HDRP (Lethal Company).

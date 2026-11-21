@@ -31,3 +31,9 @@ Unity 2022.3, Mono, **HDRP**: 179 shaders compiled for D3D11 only, and HDRP need
 2. Translate StructuredBuffer variants (RDEF type `SIT_STRUCTURED` + struct member layout) — probably the corner square.
 3. Real voice test, then echo cancellation (WebRTC AEC3 builds for arm64 could replace the pass-through stub).
 4. ULTRAKILL (Unity, Mono, built-in pipeline) is the natural second target for this toolkit.
+
+## Steam Cloud
+* Enabled 2026-11-21 with `tools/steam_entry.py --appid 3241660 --name "R.E.P.O." --cloud add <R.E.P.O.app>` (Steam closed). R.E.P.O.'s cloud
+  rules cover `LocalLow/semiwork/Repo/**/*.es3` and the cosmetics preset icons; the override maps them to
+  `~/Library/Application Support/local.repo.port` on macOS. Mac, CrossOver and Windows now share one cloud copy.
+* First sync downloaded all 171 cloud files and replaced local `SettingsData.es3` and `CurrentKeyBindings.es3` with the cloud versions.
