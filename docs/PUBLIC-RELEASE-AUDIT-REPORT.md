@@ -155,7 +155,8 @@ and whether Directive 2009/24/EC Articles 5–6 (interoperability) apply, are le
 | 2026-11-21 | W6 | `tools/discord_syms.txt` and `tools/discord_stub.c` removed: unused (`natives.py --discord` derives the names at build time from the user's own `Discord.Sdk.dll`). They remain in history at `e5b994a` and earlier. | fixed (history unchanged) |
 | 2026-11-21 | W7 | `tools/build_hlslcc.sh` fetches HLSLcc at pinned commit `3ea1fcd6bd0ac445bc078de0bf32f0950188577b` (fetch verified). | fixed |
 | 2026-11-21 | W8 | `THIRD-PARTY-NOTICES.md` added. | fixed |
-| | W1, W2, W3, W4, W5, W9, W10 | Owner decision, a separate audit, a test with another account, or counsel. | open |
+| 2026-11-21 | W1 | Project renamed `metalport` (README title; GitHub repository renamed, private); "Unity" now appears only descriptively. | fixed |
+| | W2, W3, W4, W5, W9, W10 | A separate audit, a test with another account, or counsel. | open |
 
-Verdict after these fixes: **HOLD** remains until W1 (name) is decided and W2 (in-progress work) is audited; then **READY WITH STATED
+Verdict after these fixes: **HOLD** remains until W2 (in-progress work) is audited; then **READY WITH STATED
 LIMITS** for a public source release, subject to the counsel items (W5, W10).

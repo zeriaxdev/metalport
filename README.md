@@ -1,4 +1,6 @@
-# unity-mac-metal-port
+# metalport
+
+*Native Apple Silicon ports of Windows Unity games.*
 
 Run a **Windows-only Unity game natively on Apple Silicon with Metal** — no Rosetta, no Wine/CrossOver — by wrapping the game's
 existing Windows data in a macOS Unity player and translating its shaders from Direct3D 11 to Metal.
