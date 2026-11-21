@@ -12,10 +12,9 @@
     "download_gb": 1.0
   },
   "supported_versions": "Built and verified against manifest 4238581831212146714 (v0.5.2). A game update changes the manifest: re-download the depot and re-run tools/port.py (the pipeline is generic; expect it to just work unless the update adds new native plugins or shader stages).",
-  "status": "playable: menu, tutorial, levels at ~110-130 fps (3024x1898, Apple M5); Steam overlay works; VOICE WORKS (mic confirmed 2026-11-20); post-processing (Uber) off",
-  "owner": "Claude session (this repo)",
+  "status": "playable: menu, tutorial, levels at ~110-130 fps (3024x1898, Apple M5); Steam overlay, networking and voice work; post-processing on except color grading; double-click launcher and Steam Play button",
   "toolkit_version": "0.3.0",
-  "port_command": "tools/port.py --data <REPO_Data> --unity <work/unity> --out <dir> --name REPO --skip-shader Hidden/PostProcessing/Uber ; tools/natives.py --tweaks --steam --discord --voice",
+  "port_command": "tools/port.py --data <REPO_Data> --unity <work/unity> --out <dir> --name REPO --allow-incomplete ; tools/natives.py --tweaks --steam --discord --voice",
   "native_plugins": {
     "steam_api64": "borrowed arm64 libsteam_api + shim (5 newer flat-API calls)",
     "discord_partner_sdk": "no-op stub",
@@ -30,15 +29,14 @@
     "note": "toggling the six effect keys does not fix the Uber shader bug"
   },
   "known_issues": [
-    "Hidden/PostProcessing/Uber translates but renders wrong (dark scene + chromatic ghosting) -> skipped, so bloom/lens/grain are off",
-    "corner square = a missing-variant material (45 StructuredBuffer instancing variants untranslated), unidentified",
+    "Color grading remains off: Lut2DBaker common-parameter handling still needs verification on Metal",
     "invites untested with a friend",
     "mods unsupported (no arm64 BepInEx)",
-    "first launch warm-up ~68 s",
-    "corner square: ~68x68 px light patch of gravel-like texture at the bottom-left of the screen, fixed screen size; NOT caused by MirrorQuality/ShadowQuality/RenderSize settings; not a missing-variant (all referenced shader variants translated); absent when the camera looks at the sky; present in development and nondevelopment players, with/without Steam overlay and Metal HUD. Cause unknown (next: Metal frame capture)."
+    "first launch warm-up ~68 s"
   ],
   "lessons": [
     "Apple-arm64 variadic ABI: Photon P/Invokes libopus' variadic opus_encoder_ctl with fixed args -> BadArguments; fixed by non-variadic wrapper exports (tools/voice_shim.c).",
-    "Steam 'Access Steam features from overlay' toast appears on every launch with the injected overlay; Valve offers no per-feature toggle (Steam > Settings > Notifications > toasts, or NO_OVERLAY=1)."
+    "Steam 'Access Steam features from overlay' toast appears on every launch with the injected overlay; Valve offers no per-feature toggle (Steam > Settings > Notifications > toasts, or NO_OVERLAY=1).",
+    "The corner-square fix needs the working Uber Metal shader plus cbfix; do not skip Hidden/PostProcessing/Uber when rebuilding. Inspect the explicitly incomplete coverage reports for remaining variants."
   ]
 }
