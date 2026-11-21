@@ -49,3 +49,5 @@ Unity 2022.3, Mono, **HDRP**: 179 graphics shaders compiled for D3D11 in the ins
   play button, which targets CrossOver for Windows games; skip its Wine/winhttp guide). Verified 2026-11-21: MenuLib 2.6.0 + MoreHead
   1.4.6 load natively. MoreHead's own asset bundle has Windows-only shaders (`Desired shader compiler platform 14 is not available`):
   translating mod bundles is the next step.
+* Since 2026-11-21 mods are **opt-in per launch**: a normal launch (Steam Play, double-click) is vanilla; add `-mods` to Steam's Launch
+  Options to load the applied mods (r2modmac's or `tools/mods`'). Verified both ways on M5.

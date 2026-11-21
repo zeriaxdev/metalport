@@ -62,7 +62,7 @@ codesign --force --deep -s - work/out/Game.app
 # 5. optional: green Play button in Steam's own library entry + Steam Cloud for the saves (quits and reopens Steam)
 tools/steam-play work/out/Game.app
 
-# 6. optional: BepInEx mods (then: tools/mods work/out/Game.app open, and drop mod .dll files in)
+# 6. optional: BepInEx mods (then: tools/mods work/out/Game.app open, drop mod .dll files in, and start with -mods)
 tools/mods work/out/Game.app install
 ```
 

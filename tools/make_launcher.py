@@ -5,7 +5,8 @@ tools/launch.sh does (Metal HUD, tweaks + Steam overlay injection, Steam app id,
   * the game quits because Steam could not confirm ownership -> dialog saying so.
 Metal HUD is off; Steam Launch Options `-hud` (or HUD=1 in the environment) turns it on. BepInEx mods load when tools/mods installed
 them (~/Library/Application Support/metalport/mods/<bundle id>); if a mod manager (r2modmac) applied a BepInEx folder to the game's
-Steam install folder, those mods are used instead, with the tools/mods BepInEx core. `-nomods` or MP_NO_MODS=1 skips mods.  Environment set by the caller wins
+Steam install folder, those mods are used instead, with the tools/mods BepInEx core. Mods load only when asked for: Steam Launch Options `-mods`, MP_MODS=1, or a mod
+manager's `--doorstop-enable true`; a normal launch is vanilla.  Environment set by the caller wins
 (tests can pass MP_NO_ACTIVATE etc.; NO_OVERLAY=1 still works).
 usage: make_launcher.py <App.app> --appid <steam app id> [--title "Display Name"]   then re-sign the app."""
 import argparse, os, plistlib, stat
@@ -25,7 +26,10 @@ if ! pgrep -x steam_osx >/dev/null; then
   tail -n +$((before + 1)) "$STEAM_LOG" 2>/dev/null | grep -q 'Logged On' || { say "Steam didn't finish signing in. Sign in to Steam, then open $TITLE again." '"OK"' >/dev/null; exit 0; }
 fi
 export SteamAppId=$APPID SteamGameId=$APPID SteamOverlayGameId=$APPID SteamMetalHook=1
-args=(); for a in "$@"; do case "$a" in -hud|HUD=1) HUD=1;; -nomods) MP_NO_MODS=1;; *) args+=("$a");; esac; done; set -- "${args[@]}"   # Steam Launch Options: -hud, -nomods
+args=(); skip=0; for a in "$@"; do                      # Steam Launch Options: -hud, -mods (mods are off unless asked for)
+  if (( skip )); then skip=0; [[ "$a" == true ]] && MP_MODS=1; continue; fi
+  case "$a" in -hud|HUD=1) HUD=1;; -mods) MP_MODS=1;; -nomods) MP_NO_MODS=1;; --doorstop-enable|--doorstop-enabled) skip=1;; *) args+=("$a");; esac
+done; set -- "${args[@]}"
 [[ -n "$HUD" ]] && export MTL_HUD_ENABLED=1
 export MP_MOUSE_SCALE=${MP_MOUSE_SCALE:-2.5}
 INJ="$C/Plugins/metalport_tweaks.dylib"; [[ -f "$INJ" ]] || INJ=""
@@ -38,7 +42,7 @@ if [[ -f "$ACF" ]]; then
   G="$HOME/Library/Application Support/Steam/steamapps/common/$(sed -n 's/.*"installdir"[[:space:]]*"\(.*\)"/\1/p' "$ACF")"
   [[ -d "$G/BepInEx/plugins" ]] && ROOT="$G"                   # mods applied there by r2modmac / r2modman-style managers
 fi
-if [[ -z "$MP_NO_MODS" && -f "$MODS/BepInEx/core/BepInEx.Preloader.dll" && -f "$MODS/libdoorstop.dylib" && -d "$ROOT/BepInEx" ]]; then
+if [[ -n "$MP_MODS" && -z "$MP_NO_MODS" && -f "$MODS/BepInEx/core/BepInEx.Preloader.dll" && -f "$MODS/libdoorstop.dylib" && -d "$ROOT/BepInEx" ]]; then
   if [[ "$ROOT" != "$MODS" ]] && ! cmp -s "$MODS/BepInEx/core/BepInEx.Preloader.dll" "$ROOT/BepInEx/core/BepInEx.Preloader.dll"; then
     rm -rf "$ROOT/BepInEx/core"; cp -R "$MODS/BepInEx/core" "$ROOT/BepInEx/core"   # use the Apple Silicon-fixed BepInEx core
   fi
