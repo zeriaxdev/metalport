@@ -1,0 +1,642 @@
+#!/usr/bin/env python3
+"""Manage Thunderstore mods for native Metalport games."""
+import argparse
+import base64
+import binascii
+from collections import deque
+import io
+import fcntl
+from hashlib import sha256
+import json
+from pathlib import Path
+import plistlib
+import re
+import shutil
+import stat
+import subprocess
+import sys
+import time
+from tempfile import NamedTemporaryFile, TemporaryDirectory
+from urllib.parse import urlsplit
+from zipfile import ZIP_DEFLATED, BadZipFile, ZipFile
+
+STEAM = Path.home() / "Library/Application Support/Steam"
+SUPPORT = Path.home() / "Library/Application Support/metalport/mods"
+GAMES = {
+    "lc": ("Lethal Company", "lethal-company", Path("/Applications/Lethal Company.app")),
+    "repo": ("R.E.P.O.", "repo", STEAM / "steamapps/common/R.E.P.O. Mac Port/R.E.P.O..app"),
+}
+TITLE, COMMUNITY, APP = GAMES["lc"]
+PROFILE = SUPPORT / "local.port.lethalcompany.metal"
+CATALOG = Path.home() / "Library/Caches/metalport/lethal-company-mods.json"
+PROFILE_API = "https://thunderstore.io/api/experimental/legacyprofile/"
+PROFILE_CODE = re.compile(r"[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}")
+BEP_AREAS = ("plugins", "patchers", "monomod", "core")
+AREAS = tuple(f"BepInEx/{area}" for area in BEP_AREAS) + ("packages",)
+API = "https://thunderstore.io/api/experimental/package/"
+STARTER = "PXC-ShipLootPlus"
+LOADER = "BepInEx-BepInExPack"
+REF = re.compile(r"([A-Za-z0-9_]+)-([A-Za-z0-9_]+)(?:-(\d+\.\d+\.\d+))?")
+LINK = re.compile(r"/c/([a-z0-9-]+)/p/([A-Za-z0-9_]+)/([A-Za-z0-9_]+)(?:/v/(\d+\.\d+\.\d+))?/?")
+CURL = ["/usr/bin/curl", "--fail", "--silent", "--show-error", "--location", "--proto", "=https", "--proto-redir", "=https"]
+DOCS = {"manifest.json", "readme.md", "changelog.md", "icon.png", "license", "license.md", "license.txt"}
+
+
+def select_game(game, app=None, community=None):
+    global TITLE, COMMUNITY, APP, PROFILE, CATALOG
+    if app is None:
+        TITLE, COMMUNITY, APP = GAMES[game]
+    else:
+        if not community or not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", community):
+            raise ValueError("--app requires a valid Thunderstore --community slug.")
+        COMMUNITY, APP = community, Path(app).expanduser()
+        TITLE = APP.stem
+    APP = APP.resolve()
+    info = plistlib.loads((APP / "Contents/Info.plist").read_bytes())
+    bundle = info["CFBundleIdentifier"]
+    if not re.fullmatch(r"[A-Za-z0-9_]+(?:[.-][A-Za-z0-9_]+)*", bundle):
+        raise ValueError("Unexpected app bundle identifier.")
+    launcher = APP / "Contents/MacOS/launch"
+    if info.get("CFBundleExecutable") != "launch" or not launcher.is_file() or "MP_MODS_DIR" not in launcher.read_text():
+        raise ValueError("This app needs a Metalport launcher with BepInEx profile support.")
+    PROFILE = SUPPORT / bundle
+    CATALOG = Path.home() / f"Library/Caches/metalport/{COMMUNITY}-mods.json"
+
+
+def reference(value):
+    match = REF.fullmatch(value)
+    if value.startswith("https://"):
+        url = urlsplit(value)
+        match = LINK.fullmatch(url.path) if url.netloc == "thunderstore.io" else None
+        if match and match[1] == COMMUNITY:
+            return match.groups()[1:]
+        raise ValueError(f"Use a Thunderstore link for {TITLE}.")
+    if not match:
+        raise ValueError("Use a Thunderstore link or Author-Package[-version].")
+    return match.groups()
+
+
+def installed(profile):
+    result = {}
+    starter = profile / "packages/ShipLootPlus/manifest.json"
+    if starter.is_file() and (profile / "BepInEx/plugins/ShipLootPlus.dll").is_file():
+        result[STARTER] = json.loads(starter.read_text())["version_number"]
+    for manifest in (profile / "BepInEx/plugins").glob("*/manifest.json"):
+        if REF.fullmatch(manifest.parent.name):
+            result[manifest.parent.name] = json.loads(manifest.read_text(encoding="utf-8-sig"))["version_number"]
+    for manifest in (profile / "packages").glob("*/metalport.json"):
+        result[manifest.parent.name] = json.loads(manifest.read_text())["version"]
+    return result
+
+
+def disabled(profile, package):
+    return (profile / "packages" / package / "disabled").is_dir()
+
+
+def set_enabled(profile, package, enabled):
+    record = profile / "packages" / package / "metalport.json"
+    if not record.is_file():
+        raise ValueError(f"{package} is not a managed package. Use add first.")
+    stash = record.parent / "disabled"
+    if enabled != stash.is_dir():
+        print(f"{package} is already {'enabled' if enabled else 'disabled'}.")
+        return
+    changes = []
+    for area in BEP_AREAS:
+        active = profile / "BepInEx" / area / package
+        saved = stash / area
+        source, target = (saved, active) if enabled else (active, saved)
+        if not (source.exists() or source.is_symlink()):
+            continue
+        if source.is_symlink() or target.exists() or target.is_symlink():
+            raise ValueError(f"Could not move {source} to {target} safely.")
+        changes.append((source, target))
+    if not enabled and not changes:
+        raise ValueError(f"No loaded files found for {package}. Use repair first.")
+    moved = []
+    try:
+        for source, target in changes:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            source.rename(target)
+            moved.append((source, target))
+        if enabled:
+            stash.rmdir()
+    except (OSError, KeyboardInterrupt):
+        for source, target in reversed(moved):
+            target.rename(source)
+        if not enabled and stash.is_dir():
+            stash.rmdir()
+        raise
+    print(f"{'Enabled' if enabled else 'Disabled'} {package}.")
+
+
+def fetch(url):
+    return subprocess.check_output([*CURL, "--compressed", "--max-time", "60", url])
+
+
+def fetch_package(author, name, version):
+    path = f"{author}/{name}/" + (f"{version}/" if version else "")
+    data = json.loads(fetch(API + path))
+    if version is None:
+        if not any(item["community"] == COMMUNITY for item in data["community_listings"]):
+            raise ValueError(f"{author}-{name} is not listed for {TITLE}.")
+        if data.get("is_deprecated"):
+            print(f"{author}-{name} is marked deprecated on Thunderstore.")
+        return data["latest"]
+    return data
+
+
+def archive_parts(item, name):
+    parts = item.filename.rstrip("/").split("/")
+    if any(part in {"", ".", ".."} or ":" in part or "\\" in part for part in parts):
+        raise ValueError(f"Unsafe ZIP path in {name}: {item.filename}")
+    if stat.S_ISLNK(item.external_attr >> 16):
+        raise ValueError(f"Symlink in ZIP for {name}: {item.filename}")
+    return parts
+
+
+def extract_file(archive, item, target):
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with archive.open(item) as source, target.open("xb") as output:
+        shutil.copyfileobj(source, output)
+
+
+def unpack(archive, stage, package):
+    with ZipFile(archive) as zip_file:
+        for item in zip_file.infolist():
+            parts = archive_parts(item, package)
+            if item.is_dir():
+                continue
+            if parts[0].lower() == "bepinex":
+                parts = parts[1:]
+                if len(parts) < 2:
+                    continue
+            area, *relative = parts
+            area = area.lower()
+            if area in BEP_AREAS and relative:
+                target = stage / "BepInEx" / area / package / Path(*relative)
+            elif area == "config" or (len(parts) == 1 and area in DOCS):
+                target = stage / "packages" / package / Path(*parts)
+            elif area in {"core", "winhttp.dll", "doorstop_config.ini", "libdoorstop.dylib", "libdoorstop_x64.so"}:
+                continue
+            else:
+                binary_area = "monomod" if parts[-1].lower().endswith(".mm.dll") else "plugins"
+                target = stage / "BepInEx" / binary_area / package / Path(*parts)
+            extract_file(zip_file, item, target)
+
+
+def version_key(version):
+    return tuple(map(int, version.split(".")))
+
+
+def label(ref):
+    author, name, _ = ref
+    return f"{author}-{name}"
+
+
+def install(refs, profile, *, update=False, repair=False):
+    current = installed(profile)
+    direct = {label(ref): ref[2] for ref in refs}
+    pending = list(refs)
+    resolved = {}
+    with TemporaryDirectory(prefix=".lc-mods-", dir=profile) as temp:
+        stage = Path(temp)
+        while pending:
+            author, name, minimum = pending.pop(0)
+            package = label((author, name, minimum))
+            if package == LOADER:
+                continue
+            if disabled(profile, package):
+                raise ValueError(f"{package} is disabled. Enable it first.")
+            exact = direct.get(package)
+            present = resolved.get(package) or current.get(package)
+            required_upgrade = present and minimum and version_key(present) < version_key(minimum)
+            if package in resolved:
+                if required_upgrade:
+                    raise ValueError(f"{package} needs {minimum}; this set selected {present}.")
+                continue
+            if present and not (update and (package in direct or required_upgrade)):
+                if exact and present != exact:
+                    raise ValueError(f"{package} is at {present}. Use update to select {exact}.")
+                if required_upgrade:
+                    raise ValueError(f"{package} needs {minimum}. Update it first.")
+                continue
+            metadata = fetch_package(author, name, exact if package in direct else minimum)
+            version = metadata["version_number"]
+            if minimum and version_key(version) < version_key(minimum):
+                raise ValueError(f"{package} needs {minimum}; this set selected {version}.")
+            if present == version and not (repair and package in direct):
+                continue
+            if present and not (profile / "packages" / package / "metalport.json").is_file():
+                raise ValueError(f"{package} is a manually installed package. Use a separate profile to install {version}.")
+            archive = stage / f"{package}.zip"
+            url = urlsplit(metadata["download_url"])
+            if url.scheme != "https" or url.hostname not in {"thunderstore.io", "ccdn.thunderstore.io", "gcdn.thunderstore.io"}:
+                raise ValueError(f"Unexpected download host for {package}.")
+            print(f"Downloading {package} {version}", flush=True)
+            subprocess.run([*CURL, "--max-time", "180", "--output", str(archive), url.geturl()], check=True)
+            unpack(archive, stage, package)
+            resolved[package] = version
+            record = stage / "packages" / package / "metalport.json"
+            record.parent.mkdir(parents=True, exist_ok=True)
+            record.write_text(json.dumps({"version": version, "dependencies": metadata["dependencies"]}))
+            pending.extend(reference(dependency) for dependency in metadata["dependencies"])
+
+        changes = []
+        for package in resolved:
+            for area in AREAS:
+                source = stage / area / package
+                target = profile / area / package
+                exists = target.exists() or target.is_symlink()
+                if exists and (package not in current or target.is_symlink()):
+                    raise ValueError(f"Existing files at {target} were preserved.")
+                if source.exists() or exists:
+                    changes.append((source, target, exists))
+        moved = []
+        try:
+            for source, target, exists in changes:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                backup = stage / "previous" / target.relative_to(profile)
+                if exists:
+                    backup.parent.mkdir(parents=True, exist_ok=True)
+                    target.rename(backup)
+                moved.append((source, target, backup))
+                if source.exists():
+                    source.rename(target)
+        except (OSError, KeyboardInterrupt):
+            for source, target, backup in reversed(moved):
+                if target.exists():
+                    target.rename(source)
+                if backup.exists():
+                    backup.rename(target)
+            raise
+
+    for package, version in resolved.items():
+        print(f"Installed {package} {version}")
+        if (profile / "packages" / package / "config").is_dir():
+            print(f"  Packaged settings: {profile / 'packages' / package / 'config'}")
+    if not resolved:
+        print("Already installed.")
+    return resolved
+
+
+def compact_catalog(data):
+    return [(pkg["full_name"], pkg["versions"][0]["version_number"], pkg["versions"][0]["description"],
+             pkg["categories"], pkg["is_deprecated"])
+            for pkg in data if pkg["versions"]]
+
+
+def search(query, packs):
+    if not CATALOG.is_file() or time.time() - CATALOG.stat().st_mtime > 43200:
+        print("Refreshing the Thunderstore catalog…", flush=True)
+        catalog = compact_catalog(json.loads(fetch(f"https://thunderstore.io/c/{COMMUNITY}/api/v1/package/")))
+        CATALOG.parent.mkdir(parents=True, exist_ok=True)
+        with NamedTemporaryFile(mode="w", dir=CATALOG.parent, delete=False) as out:
+            json.dump(catalog, out)
+        Path(out.name).replace(CATALOG)
+    else:
+        catalog = json.loads(CATALOG.read_text())
+    query = query.casefold()
+    matches = [(query not in name.casefold(), name, version, description)
+               for name, version, description, categories, deprecated in catalog
+               if not deprecated and (not packs or "Modpacks" in categories)
+               and (query in name.casefold() or query in description.casefold())]
+    for _, name, version, description in sorted(matches)[:15]:
+        print(f"{name} {version}  {description}")
+    if not matches:
+        print("No matches.")
+
+
+def info(ref):
+    author, name, version = reference(ref)
+    data = fetch_package(author, name, version)
+    print(f"{author}-{name} {data['version_number']}\n{data['description']}")
+    print(f"https://thunderstore.io/c/{COMMUNITY}/p/{author}/{name}/")
+    print("Dependencies: " + (", ".join(data["dependencies"]) or "none"))
+
+
+def outdated(profile):
+    current = installed(profile)
+    changes = []
+    for package in sorted(current):
+        author, name, _ = reference(package)
+        latest = fetch_package(author, name, None)["version_number"]
+        if version_key(latest) > version_key(current[package]):
+            print(f"{package} {current[package]} → {latest}")
+            changes.append(package)
+    if not changes:
+        print("Up to date.")
+
+
+def check(profile):
+    current = installed(profile)
+    for package, version in sorted(current.items()):
+        if disabled(profile, package):
+            print(f"{package} {version}: disabled")
+            continue
+        issues = []
+        record = profile / "packages" / package / "metalport.json"
+        metadata = json.loads(record.read_text()) if record.is_file() else {}
+        if "dependencies" not in metadata:
+            try:
+                author, name, _ = reference(package)
+                metadata = fetch_package(author, name, version)
+            except (ValueError, KeyError, subprocess.CalledProcessError):
+                issues.append("dependency metadata unavailable")
+        for dependency in metadata.get("dependencies", []):
+            author, name, minimum = reference(dependency)
+            dep = label((author, name, minimum))
+            if dep == LOADER or (dep in current and not disabled(profile, dep) and (minimum is None or version_key(current[dep]) >= version_key(minimum))):
+                continue
+            if package == STARTER and dep == "AinaVT-LethalConfig":
+                continue  # The starter’s publisher documents this dependency as optional.
+            issues.append(f"needs {dependency}")
+        print(f"{package} {version}: " + (", ".join(issues) or "no recorded dependency issues"))
+
+    bep = profile / "BepInEx"
+    for area in BEP_AREAS:
+        for file in (bep / area).rglob("*"):
+            if not file.is_file():
+                continue
+            if file.suffix.lower() in {".dll", ".exe"} and is_native_windows(file):
+                print(f"Review Windows native binary: {file.relative_to(bep)}")
+            elif file.suffix.lower() == ".dylib" and "arm64" not in subprocess.run(
+                ["lipo", "-archs", str(file)], capture_output=True, text=True
+            ).stdout:
+                print(f"Review native library without arm64 support: {file.relative_to(bep)}")
+            elif is_asset_bundle(file):
+                print(f"Test asset bundle in game: {file.relative_to(bep)}")
+    log = bep / "LogOutput.log"
+    if log.is_file():
+        with log.open(errors="replace") as entries:
+            errors = deque((line.rstrip() for line in entries
+                            if line.startswith(("[Error", "[Fatal")) or "Could not load file or assembly" in line),
+                           maxlen=8)
+        for line in errors:
+            print(line)
+    print("Static checks and the last BepInEx log. In-game compatibility still needs a play test.")
+
+
+def is_asset_bundle(file):
+    if file.suffix.lower() in {".bundle", ".assets", ".lethalbundle", ".assetbundle"}:
+        return True
+    with file.open("rb") as stream:
+        return stream.read(8).startswith((b"UnityFS", b"UnityRaw", b"UnityWeb"))
+
+
+def is_native_windows(file):
+    with file.open("rb") as stream:
+        header = stream.read(64)
+        if len(header) < 64 or header[:2] != b"MZ":
+            return False
+        stream.seek(int.from_bytes(header[60:64], "little"))
+        pe = stream.read(256)
+        if pe[:4] != b"PE\0\0":
+            return False
+        optional = pe[24:]
+        offset = {b"\x0b\x01": 96, b"\x0b\x02": 112}.get(optional[:2])
+        return offset is not None and not any(optional[offset + 112:offset + 116])
+
+
+def named_profile(name):
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,47}", name):
+        raise ValueError("Use a profile name with letters, numbers, underscores, or dashes.")
+    return PROFILE / "profiles" / name
+
+
+def exported_profile(value):
+    if PROFILE_CODE.fullmatch(value):
+        header, _, contents = fetch(f"{PROFILE_API}get/{value}/").partition(b"\n")
+        if header.strip() != b"#r2modman":
+            raise ValueError("Thunderstore returned an unknown profile format.")
+        return ZipFile(io.BytesIO(base64.b64decode(b"".join(contents.split()), validate=True)))
+    return ZipFile(Path(value).expanduser())
+
+
+def share_manifest(profile, name):
+    packages = {name: version for name, version in installed(profile).items() if not disabled(profile, name)}
+    if not packages:
+        raise ValueError("An empty profile cannot be shared.")
+    manifest = [f'profileName: "{name}"', "mods:"]
+    for package, version in sorted(packages.items()):
+        _, _, version = reference(f"{package}-{version}")
+        major, minor, patch = map(int, version.split("."))
+        manifest.extend((f"- name: {package}", "  version:", f"    major: {major}",
+                         f"    minor: {minor}", f"    patch: {patch}", "  enabled: true"))
+    return ("\n".join(manifest) + "\n").encode()
+
+
+def save_share_code(cache, fingerprint, code):
+    with TemporaryDirectory(dir=cache.parent) as directory:
+        temporary = Path(directory) / cache.name
+        temporary.write_text(json.dumps({"fingerprint": fingerprint, "code": code}))
+        temporary.replace(cache)
+
+
+def share(profile, name):
+    manifest = share_manifest(profile, name)
+    fingerprint = sha256(manifest).hexdigest()
+    cache = profile / ".mp-share-code.json"
+    try:
+        previous = json.loads(cache.read_text())
+    except (FileNotFoundError, ValueError):
+        previous = {}
+    if isinstance(previous, dict) and previous.get("fingerprint") == fingerprint:
+        code = previous.get("code")
+        if isinstance(code, str) and PROFILE_CODE.fullmatch(code):
+            print(code)
+            return
+    output = io.BytesIO()
+    with ZipFile(output, "w", compression=ZIP_DEFLATED) as archive:
+        archive.writestr("export.r2x", manifest)
+    payload = b"#r2modman\n" + base64.b64encode(output.getvalue())
+    # Upload only public package identifiers and versions from the local profile.
+    response = subprocess.check_output([
+        "/usr/bin/curl", "--fail-with-body", "--silent", "--show-error", "--max-time", "60",
+        "--header", "Content-Type: application/octet-stream", "--data-binary", "@-",
+        f"{PROFILE_API}create/",
+    ], input=payload)
+    code = json.loads(response)["key"]
+    if not isinstance(code, str) or not PROFILE_CODE.fullmatch(code):
+        raise ValueError("Thunderstore returned an invalid profile code.")
+    save_share_code(cache, fingerprint, code)
+    print(code)
+
+
+def import_export(archive, profile):
+    data = archive.read("export.r2x").decode("utf-8-sig")
+    community = re.search(r"(?m)^community:[ \t]*(\S+)", data)
+    if community and community[1].strip("\"'") not in {COMMUNITY, "null", "~"}:
+        raise ValueError("This export is for a different Thunderstore community.")
+    entries = re.findall(r"(?m)^\s*- name: ([A-Za-z0-9_]+-[A-Za-z0-9_]+)\s*\n\s+version:\s*\n"
+                         r"\s+major: (\d+)\s*\n\s+minor: (\d+)\s*\n\s+patch: (\d+)\s*\n"
+                         r"\s+enabled: (true|false)\s*$", data, re.IGNORECASE)
+    if len(entries) != len(re.findall(r"(?m)^\s*- name:", data)) or not entries:
+        raise ValueError("Unsupported or empty .r2z package list.")
+    refs = [reference(f"{name}-{major}.{minor}.{patch}") for name, major, minor, patch, enabled in entries
+            if enabled.casefold() == "true"]
+    if refs:
+        install(refs, profile)
+    for item in archive.infolist():
+        parts = archive_parts(item, "profile export")
+        if not item.is_dir() and parts[0].lower() == "config" and len(parts) > 1:
+            extract_file(archive, item, profile / "BepInEx" / Path(*parts))
+
+
+def create_profile(name, value, exported):
+    if name == "default":
+        raise ValueError("Choose a name other than default.")
+    destination = named_profile(name)
+    if destination.exists() or destination.is_symlink():
+        raise ValueError(f"Profile {name} already exists. Choose a new name.")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    with TemporaryDirectory(prefix=".profile-", dir=destination.parent) as temp:
+        profile = Path(temp) / "profile"
+        profile.mkdir()
+        (profile / "BepInEx/plugins").mkdir(parents=True)
+        loader = PROFILE / "BepInEx/core"
+        shutil.copytree(loader, profile / "BepInEx/core",
+                        ignore=lambda directory, names: [name for name in names if (Path(directory) / name).is_dir()])
+        shutil.copy2(PROFILE / "libdoorstop.dylib", profile)
+        if exported:
+            with exported_profile(value) as archive:
+                import_export(archive, profile)
+        else:
+            ref = reference(value)
+            installed_packages = install([ref], profile)
+            # Install dependency defaults first so the pack’s own settings take precedence.
+            for package in reversed(installed_packages):
+                config = profile / "packages" / package / "config"
+                if config.is_dir():
+                    shutil.copytree(config, profile / "BepInEx/config", dirs_exist_ok=True)
+        profile.rename(destination)
+    print(f"Profile {name} is ready. Launch with: mp-mods --app \"{APP}\" --community {COMMUNITY} --profile {name} play")
+
+
+def require_stopped():
+    processes = subprocess.check_output(["ps", "-axo", "comm="], text=True)
+    if any(line.strip().startswith(f"{APP}/Contents/") for line in processes.splitlines()):
+        raise ValueError(f"Quit {TITLE} first.")
+
+
+def play(profile, name):
+    require_stopped()
+    launcher = APP / "Contents/MacOS/launch"
+    steam = STEAM / "Steam.AppBundle/Steam/Contents/MacOS/steam_osx"
+    info = plistlib.loads((APP / "Contents/Info.plist").read_bytes())
+    app_id = str(info.get("MetalportSteamAppID", ""))
+    if re.fullmatch(r"[1-9][0-9]*", app_id) and steam.is_file():
+        manifest = STEAM / "steamapps" / f"appmanifest_{app_id}.acf"
+        if manifest.is_file() and "--mp-mod-profile=" in launcher.read_text():
+            directory = re.search(r'"installdir"\s+"([^"/]+)"', manifest.read_text())
+            if directory:
+                entry = STEAM / "steamapps/common" / directory[1] / APP.name
+                if entry.resolve() == APP:
+                    subprocess.run([str(steam), "-applaunch", app_id, f"--mp-mod-profile={name}"], check=True)
+                    return
+    subprocess.run(["open", "--env", f"MP_MODS_DIR={profile}", "--env", f"MP_LOG={profile / 'Player.log'}",
+                    "-a", str(APP), "--args", "-mods"], check=True)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    game_options = parser.add_mutually_exclusive_group()
+    game_options.add_argument("--game", choices=GAMES)
+    game_options.add_argument("--app", help="Use another Metalport .app with --community")
+    parser.add_argument("--community", help="Thunderstore community slug for --app")
+    parser.add_argument("--profile", metavar="NAME", help="Select a named mod profile")
+    commands = parser.add_subparsers(dest="command", required=True)
+    commands.add_parser("games", help="List the built-in game shortcuts")
+    commands.add_parser("add", help="Install a package and its dependencies").add_argument("package")
+    commands.add_parser("info", help="Look up a package").add_argument("package")
+    lookup = commands.add_parser("search", help="Search the selected game’s Thunderstore catalog")
+    lookup.add_argument("query")
+    lookup.add_argument("--packs", action="store_true")
+    for command, help_text in (
+        ("pack", "Install a published modpack into a new profile"),
+        ("import", "Import a profile code or .r2z file into a new profile"),
+    ):
+        action = commands.add_parser(command, help=help_text)
+        action.add_argument("name")
+        action.add_argument("source")
+    commands.add_parser("profiles", help="List named mod profiles")
+    commands.add_parser("share", help="Upload managed mod names and versions to Thunderstore and print a code").add_argument("name", nargs="?")
+    commands.add_parser("play", help="Launch the game with a named mod profile").add_argument("name", nargs="?")
+    commands.add_parser("update", help="Update one managed package").add_argument("package")
+    commands.add_parser("repair", help="Reinstall a managed package at its current version").add_argument("package")
+    commands.add_parser("disable", help="Disable one managed package and preserve its files").add_argument("package")
+    commands.add_parser("enable", help="Re-enable a disabled managed package").add_argument("package")
+    commands.add_parser("outdated", help="Find available package updates")
+    commands.add_parser("check", help="Check dependencies, mod files, and loader errors")
+    commands.add_parser("list", help="List managed packages")
+    commands.add_parser("folder", help="Open the plugins folder in Finder")
+    options = parser.parse_args()
+    try:
+        if options.command == "games":
+            for game, (title, community, _) in GAMES.items():
+                print(f"{game}: {title} ({community})")
+            return
+        if options.community and not options.app:
+            raise ValueError("--community is used with --app.")
+        if not options.game and not options.app and Path(sys.argv[0]).name != "lc-mods":
+            raise ValueError("Choose --game lc, --game repo, or --app with --community.")
+        select_game(options.game or "lc", options.app, options.community)
+        if options.command == "search":
+            search(options.query, options.packs)
+            return
+        if options.command == "info":
+            info(options.package)
+            return
+        profile = PROFILE if options.profile in {None, "default"} else named_profile(options.profile)
+        if options.command in {"play", "share"}:
+            if options.profile and options.name and options.profile != options.name:
+                raise ValueError("Choose one profile name.")
+            options.name = options.name or options.profile or "default"
+            profile = PROFILE if options.name == "default" else named_profile(options.name)
+        if not (profile / "BepInEx/core/BepInEx.Preloader.dll").is_file():
+            raise ValueError(f"The native BepInEx profile is missing: {profile}")
+        if options.command == "folder":
+            subprocess.run(["open", str(profile / "BepInEx/plugins")], check=True)
+        elif options.command == "play":
+            play(profile, options.name)
+        elif options.command == "profiles":
+            print("default")
+            for folder in sorted((PROFILE / "profiles").glob("*")):
+                if not folder.name.startswith(".") and (folder / "BepInEx/core/BepInEx.Preloader.dll").is_file():
+                    print(folder.name)
+        elif options.command == "list":
+            for name, version in sorted(installed(profile).items()):
+                status = " (disabled)" if disabled(profile, name) else ""
+                print(f"{name} {version}{status}")
+        elif options.command == "check":
+            check(profile)
+        elif options.command == "outdated":
+            outdated(profile)
+        else:
+            with (profile / ".lc-mods.lock").open("a") as lock:
+                fcntl.flock(lock, fcntl.LOCK_EX)
+                if options.command == "share":
+                    share(profile, options.name)
+                elif options.command in {"pack", "import"}:
+                    create_profile(options.name, options.source, options.command == "import")
+                elif options.command in {"disable", "enable"}:
+                    require_stopped()
+                    set_enabled(profile, label(reference(options.package)), options.command == "enable")
+                else:
+                    ref = reference(options.package)
+                    repairing = options.command == "repair"
+                    updating = repairing or options.command == "update"
+                    if updating:
+                        current = installed(profile).get(label(ref))
+                        if not current:
+                            raise ValueError(f"{label(ref)} is not installed. Use add first.")
+                        require_stopped()
+                        if repairing:
+                            ref = (ref[0], ref[1], current)
+                    install([ref], profile, update=updating, repair=repairing)
+    except (ValueError, OSError, subprocess.CalledProcessError, BadZipFile, binascii.Error, KeyError) as error:
+        parser.exit(1, f"{error}\n")
+
+
+if __name__ == "__main__":
+    main()

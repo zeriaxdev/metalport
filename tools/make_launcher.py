@@ -26,10 +26,23 @@ if ! pgrep -x steam_osx >/dev/null; then
   tail -n +$((before + 1)) "$STEAM_LOG" 2>/dev/null | grep -q 'Logged On' || { say "Steam didn't finish signing in. Sign in to Steam, then open $TITLE again." '"OK"' >/dev/null; exit 0; }
 fi
 export SteamAppId=$APPID SteamGameId=$APPID SteamOverlayGameId=$APPID SteamMetalHook=1
-args=(); skip=0; for a in "$@"; do                      # Steam Launch Options: -hud, -mods (mods are off unless asked for)
+profile=""; args=(); skip=0; for a in "$@"; do                      # Steam Launch Options: -hud, -mods (mods are off unless asked for)
   if (( skip )); then skip=0; [[ "$a" == true ]] && MP_MODS=1; continue; fi
-  case "$a" in -hud|HUD=1) HUD=1;; -mods) MP_MODS=1;; -nomods) MP_NO_MODS=1;; --doorstop-enable|--doorstop-enabled) skip=1;; *) args+=("$a");; esac
+  case "$a" in -hud|HUD=1) HUD=1;; -mods) MP_MODS=1;; --mp-mod-profile=*) profile="${a#*=}";; -nomods) MP_NO_MODS=1;; --doorstop-enable|--doorstop-enabled) skip=1;; *) args+=("$a");; esac
 done; set -- "${args[@]}"
+if [[ -n "$profile" ]]; then
+  case "$profile" in
+    (*[!A-Za-z0-9_-]*|[!A-Za-z0-9]*) print -u2 "Invalid Metalport mod profile."; exit 1;;
+  esac
+  (( ${#profile} <= 48 )) || exit 1
+  MP_MODS_DIR="$HOME/Library/Application Support/metalport/mods/$(/usr/bin/plutil -extract CFBundleIdentifier raw "$C/Info.plist")"
+  [[ "$profile" == default ]] || MP_MODS_DIR="$MP_MODS_DIR/profiles/$profile"
+  [[ -f "$MP_MODS_DIR/BepInEx/core/BepInEx.Preloader.dll" && -f "$MP_MODS_DIR/libdoorstop.dylib" ]] || {
+    print -u2 "Metalport mod profile is missing: $profile"; exit 1
+  }
+  MP_MODS=1
+  MP_LOG="$MP_MODS_DIR/Player.log"
+fi
 [[ -n "$HUD" ]] && export MTL_HUD_ENABLED=1
 export MP_MOUSE_SCALE=${MP_MOUSE_SCALE:-2.5}
 INJ="$C/Plugins/metalport_tweaks.dylib"; [[ -f "$INJ" ]] || INJ=""
@@ -38,7 +51,7 @@ OVL="$HOME/Library/Application Support/Steam/Steam.AppBundle/Steam/Contents/MacO
 MODS="${MP_MODS_DIR:-$HOME/Library/Application Support/metalport/mods/$(/usr/bin/plutil -extract CFBundleIdentifier raw "$C/Info.plist")}"
 ROOT="$MODS"                                                   # BepInEx: tools/mods folder, or a mod manager's (r2modmac) game folder
 ACF="$HOME/Library/Application Support/Steam/steamapps/appmanifest_$APPID.acf"
-if [[ -f "$ACF" ]]; then
+if [[ -z "$MP_MODS_DIR" && -f "$ACF" ]]; then
   G="$HOME/Library/Application Support/Steam/steamapps/common/$(sed -n 's/.*"installdir"[[:space:]]*"\(.*\)"/\1/p' "$ACF")"
   [[ -d "$G/BepInEx/plugins" ]] && ROOT="$G"                   # mods applied there by r2modmac / r2modman-style managers
 fi
