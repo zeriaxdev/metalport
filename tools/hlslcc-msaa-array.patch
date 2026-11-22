@@ -1,0 +1,32 @@
+--- a/src/toMetalInstruction.cpp
++++ b/src/toMetalInstruction.cpp
+@@ -705,8 +705,12 @@
+         }
+         case REFLECT_RESOURCE_DIMENSION_TEXTURE2DMSARRAY:
+         {
+-            psContext->m_Reflection.OnDiagnostics("Multisampled texture arrays not supported in Metal (in texel fetch)", 0, true);
+-            return;
++            glsl << TranslateOperand(&psInst->asOperands[1], TO_FLAG_UNSIGNED_INTEGER | TO_AUTO_EXPAND_TO_VEC2, 3 /* .xy */);
++            bcatcstr(glsl, ", ");
++            glsl << TranslateOperand(&psInst->asOperands[1], TO_FLAG_UNSIGNED_INTEGER, OPERAND_4_COMPONENT_MASK_Z); // Array index
++            bcatcstr(glsl, ", ");
++            glsl << TranslateOperand(&psInst->asOperands[3], TO_FLAG_UNSIGNED_INTEGER, OPERAND_4_COMPONENT_MASK_X); // Sample index
++            break;
+         }
+         case REFLECT_RESOURCE_DIMENSION_TEXTURECUBE:
+         case REFLECT_RESOURCE_DIMENSION_TEXTURECUBEARRAY:
+@@ -745,8 +749,12 @@
+         }
+         case REFLECT_RESOURCE_DIMENSION_TEXTURE2DMSARRAY:
+         {
+-            psContext->m_Reflection.OnDiagnostics("Multisampled texture arrays not supported in Metal (in texel fetch)", 0, true);
+-            return;
++            glsl << TranslateOperand(&psInst->asOperands[1], TO_FLAG_UNSIGNED_INTEGER | TO_AUTO_EXPAND_TO_VEC2, 3 /* .xy */);
++            bformata(glsl, " + uint2(%d, %d), ", psInst->iUAddrOffset, psInst->iVAddrOffset);
++            glsl << TranslateOperand(&psInst->asOperands[1], TO_FLAG_UNSIGNED_INTEGER, OPERAND_4_COMPONENT_MASK_Z); // Array index
++            bcatcstr(glsl, ", ");
++            glsl << TranslateOperand(&psInst->asOperands[3], TO_FLAG_UNSIGNED_INTEGER, OPERAND_4_COMPONENT_MASK_X); // Sample index
++            break;
+         }
+         case REFLECT_RESOURCE_DIMENSION_TEXTURE1D:
+         {

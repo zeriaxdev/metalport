@@ -98,6 +98,12 @@ class TranslatorRegression(unittest.TestCase):
             instruction(46, 0x001000f2, 0, 0x4002, 0, 0, 0, 0, 0x00107e46, 0, 0x4001, 3), instruction(62)))
         self.assertIn('tex0.read(uint2(0x0u, 0x0u), 0x3u)', msl)
 
+    def test_multisample_array_preserves_slice_and_sample_index(self):
+        msl = self.translate(program(
+            instruction(88, 0x00107000, 0, 0x5555, controls=9 << 11), instruction(104, 1), instruction(155, 1, 1, 1),
+            instruction(46, 0x001000f2, 0, 0x4002, 0, 0, 2, 0, 0x00107e46, 0, 0x4001, 3), instruction(62)))
+        self.assertIn('tex0.read(uint2(0x0u, 0x0u), uint(0x2u), 0x3u)', msl)
+
 
 if __name__ == '__main__':
     unittest.main()
