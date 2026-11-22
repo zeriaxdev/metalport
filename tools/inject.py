@@ -2,6 +2,8 @@ import sys, os, struct, bisect, collections, json, UnityPy, lz4.block
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from metalsub import *
 import cbfix
+import re
+from compute_shader.unityblob import VERSION, parse_params, write_params
 from metal_check import require_valid
 from compute_support import patch_compute
 from UnityPy.enums import ShaderGpuProgramType as T
@@ -39,6 +41,40 @@ def pack_chunks(subs, multi, limit=8 * 1024 * 1024):
     segs.append(bytes(cur))
     table = struct.pack('<I', len(subs)) + b''.join(struct.pack('<III', *e) for e in ents)
     return [table] + segs
+
+# HLSLcc allocates Metal slots independently for each translated program.
+METAL_SLOT = re.compile(rb"\b(cb|buf|tex|sampler_s)(\d+)\s*\[\[\s*(buffer|texture|sampler)\s*\(\s*(\d+)\s*\)")
+BINDING_KIND = {
+    (b"tex", b"texture"): 0,
+    (b"cb", b"buffer"): 1,
+    (b"buf", b"buffer"): 2,
+    (b"sampler_s", b"sampler"): 4,
+}
+
+
+def remap_metal_params(data, msl):
+    if data[:4] != struct.pack("<I", VERSION):
+        return data
+    slots = {
+        (BINDING_KIND[prefix, space], int(source)): int(target)
+        for prefix, source, space, target in METAL_SLOT.findall(msl)
+        if (prefix, space) in BINDING_KIND and source != target
+    }
+    if not slots:
+        return data
+    params = parse_params(data)
+    changed = False
+    for binding in params["bindings"]:
+        kind, index = binding["kind"], binding["index"]
+        new_index = slots.get((kind, index), index)
+        binding["index"] = new_index
+        changed |= new_index != index
+        if kind == 0:
+            sampler = binding["extra"]
+            binding["extra"] = slots.get((4, sampler), sampler)
+            changed |= binding["extra"] != sampler
+    return write_params(params) if changed else data
+
 
 def patch_shader(tt, stats):
     plats = tt['platforms']
@@ -88,6 +124,14 @@ def patch_shader(tt, stats):
         if i in mtl: new.append(build_metal_sub(s, mtl[i])); done[i] = True
         else: new.append(params.get(i, s))
     if not done: stats['skip_nothing_translated'] += 1; return False
+    metal_params = {}
+    for pidx, programs in users.items():
+        for program in programs:
+            data = remap_metal_params(new[pidx], mtl[program])
+            if data != new[pidx]:
+                metal_params[pidx, program] = len(new)
+                new.append(data)
+    stats['metal_parameter_tables_rebound'] += len(metal_params)
     raws = pack_chunks(new, multi); comps = [lz4.block.compress(r, store_size=False, mode='high_compression', compression=9) for r in raws]
     new_offs, pos = [], len(blob)
     for c in comps: new_offs.append(pos); pos += len(c)
@@ -108,7 +152,7 @@ def patch_shader(tt, stats):
                     for e, pidx in zip(grp, stg['m_ParameterBlobIndices'][g]):
                         if e['m_GpuProgramType'] in VS_TYPES | PS_TYPES and done.get(e['m_BlobIndex']):
                             ne = dict(e); ne['m_GpuProgramType'] = METAL['VS'] if e['m_GpuProgramType'] in VS_TYPES else METAL['PS']
-                            add.append(ne); addp.append(pidx)
+                            add.append(ne); addp.append(metal_params.get((pidx, e['m_BlobIndex']), pidx))
                     grp.extend(add); stg['m_ParameterBlobIndices'][g].extend(addp); stats['entries_added'] += len(add)
     k = bisect.bisect(plats, 14)
     tt['platforms'].insert(k, 14); tt['offsets'].insert(k, new_offs); tt['compressedLengths'].insert(k, [len(c) for c in comps])

@@ -19,6 +19,7 @@ import shader_coverage
 import xlate_all
 import port
 import lz4.block
+from compute_shader.unityblob import VERSION, parse_params, write_params
 
 
 def program(ty):
@@ -28,8 +29,8 @@ def program(ty):
     return struct.pack('<7I', 202012090, ty, 0, 0, 0, 0, 0) + struct.pack('<I', len(dxbc)) + dxbc
 
 
-def shader(types=(15, 17)):
-    subs = [program(ty) for ty in types]
+def shader(types=(15, 17), params=()):
+    subs = [program(ty) for ty in types] + list(params)
     raw = inject.pack_chunks(subs, False)[0]
     blob = lz4.block.compress(raw, store_size=False)
     return {'platforms': [4], 'offsets': [[0]], 'compressedLengths': [[len(blob)]],
@@ -78,6 +79,34 @@ class ShaderChecks(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'Metal rejected'):
                 inject.patch_shader(tree,collections.Counter())
         self.assertEqual(tree,before)
+
+    def test_metal_programs_get_independent_binding_tables(self):
+        data = write_params({"version": VERSION, "groups": [], "tail": b"", "bindings": [
+            {"name": "Source", "kind": 0, "index": 10, "extra": 2, "tex": 4},
+            {"name": "Geometry", "kind": 2, "index": 0, "extra": 0},
+        ]})
+        tree = shader(params=(data,))
+        vertex = {"m_PlayerSubPrograms": [[{"m_BlobIndex": 0, "m_GpuProgramType": 15}]],
+                  "m_ParameterBlobIndices": [[2]]}
+        fragment = {"m_PlayerSubPrograms": [[{"m_BlobIndex": 1, "m_GpuProgramType": 17}]],
+                    "m_ParameterBlobIndices": [[2]]}
+        tree["m_ParsedForm"]["m_SubShaders"] = [{"m_Passes": [
+            {"progVertex": vertex, "progFragment": fragment},
+        ]}]
+        translations = [
+            b"tex10 [[texture(1)]], buf0 [[buffer(3)]], sampler_s2 [[sampler(0)]]",
+            b"tex10 [[texture(4)]], sampler_s2 [[sampler(1)]]",
+        ]
+        with patch.object(inject, "cached_msl", side_effect=translations), patch.object(inject, "require_valid"):
+            self.assertTrue(inject.patch_shader(tree, collections.Counter()))
+        original, _ = inject.read_subs(tree, 0, tree["compressedBlob"])
+        metal, _ = inject.read_subs(tree, 1, tree["compressedBlob"])
+        self.assertEqual(original[2], data)
+        for stage, expected in ((vertex, [(1, 0), (3, 0)]), (fragment, [(4, 1), (0, 0)])):
+            indices = stage["m_ParameterBlobIndices"][0]
+            self.assertEqual(indices[0], 2)
+            bindings = parse_params(metal[indices[1]])["bindings"]
+            self.assertEqual([(binding["index"], binding["extra"]) for binding in bindings], expected)
 
     def test_invalid_final_msl_does_not_mutate_shader(self):
         tree = shader((15,))
