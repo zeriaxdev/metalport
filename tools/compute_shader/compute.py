@@ -6,6 +6,7 @@ import struct
 
 from . import metal
 from . import rdef as R
+from dxbc_rdef import parse_decls
 
 D3D11_RENDERER, METAL_RENDERER = 2, 16
 # Unity TextureDimension codes used by kernel bindings -> blob-style "tex" field
@@ -42,9 +43,15 @@ def kernel_params(variant, kv):
 def fixed_dxbc(variant, kv):
     params, uav_textures = kernel_params(variant, kv)
     dx = bytes(kv["code"])
-    major, minor, ptype, _ = R.dxbc_info(dx)
+    major, minor, ptype, chunks = R.dxbc_info(dx)
+    _, _, _, textures, _, buffers = parse_decls(chunks.get(b"SHDR") or chunks[b"SHEX"])
+    uav_return_types = {entry[5]: entry[2] for entry in buffers if entry[1] == _UAV_TEX}
+    for binding in params["bindings"]:
+        if binding["kind"] == 0 and binding["index"] in textures:
+            binding["return_type"] = textures[binding["index"]][1]
     rd = R.build_rdef(params, major, minor, ptype, extra_resources=[
-        (u["name"], _UAV_TEX, 5, _srv_dim(u["texDimension"]), 0, u["bindPoint"], 1, 0) for u in uav_textures])
+        (u["name"], _UAV_TEX, uav_return_types[u["bindPoint"]], _srv_dim(u["texDimension"]),
+         0, u["bindPoint"], 1, 0) for u in uav_textures])
     return R.with_rdef(dx, rd)
 
 

@@ -141,7 +141,7 @@ def build_rdef(params, major, minor, shader_type, extra_resources=()):
         if b["kind"] == 0:
             dim, ms = b["tex"] >> 1, b["tex"] & 1
             srv = _SRV.get(dim, (4, 6))[ms]
-            resources.append((b["name"], 2, 5, srv, 0xFFFFFFFF if not ms else 0, b["index"], 1, 0xC))
+            resources.append((b["name"], 2, b.get("return_type", 5), srv, 0xFFFFFFFF if not ms else 0, b["index"], 1, 0xC))
             sampler_names.setdefault(b["extra"], "sampler" + b["name"])
     for b in params["bindings"]:
         if b["kind"] == 4:

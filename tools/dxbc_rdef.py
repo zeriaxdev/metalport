@@ -22,7 +22,7 @@ def parse_decls(shdr):
         if op == 0x35: ln = words[i + 1]      # customdata block: length lives in the next dword
         if ln == 0: break
         if op == 0x59:   cbs[words[i+2]] = words[i+3]                       # dcl_constantbuffer cbN[size]
-        elif op == 0x58: texs[words[i+2]] = (t >> 11) & 0x1f              # dcl_resource tN, dimension
+        elif op == 0x58: texs[words[i+2]] = ((t >> 11) & 0x1f, words[i+ln-1] & 0xf)
         elif op == 0x5a: samps[words[i+2]] = (t >> 11) & 0xf              # dcl_sampler sN, mode
         elif op in (0x9c, 0x9d, 0x9e, 0xa1, 0xa2):  # typed/raw/structured UAVs and buffer SRVs
             r = words[i+2]
@@ -44,7 +44,7 @@ def build_rdef(major, minor, cbs, texs, samps, buffers):
     sm5 = major >= 5
     ress = []   # (name, type, ret, dim, samples, bind, count, flags)
     for r, n in sorted(cbs.items()):   ress.append((f'cb{r}', 0, 0, 0, 0, r, 1, 0))
-    for r, d in sorted(texs.items()):  ress.append((f'tex{r}', 2, 5, DIM_MAP.get(d, 4), 0xffffffff, r, 1, 0x0c))
+    for r, (d, ret) in sorted(texs.items()):  ress.append((f'tex{r}', 2, ret, DIM_MAP.get(d, 4), 0xffffffff, r, 1, 0x0c))
     for r, m in sorted(samps.items()): ress.append((f'sampler_s{r}', 3, 0, 0, 0, r, 1, 0))
     ress.extend(buffers)
     nvar = 10 if sm5 else 6
