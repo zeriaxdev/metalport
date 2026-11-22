@@ -1,6 +1,6 @@
 # Features and supported games
 
-Last reviewed: 2026-11-21 (toolkit 0.6). Update this page in the same commit as any change it describes.
+Last reviewed: 2026-11-23 (toolkit 0.7.0). Update this page in the same commit as any change it describes.
 
 **Legend:** ✅ **Works**: used in a tested local port within the stated scope. ◐ **Partial**: works with limits (see notes). ❌ **Not yet**: planned or possible,
 not done. ⛔ **Out of scope**: outside this toolkit's data/managed-IL approach. A status does not imply every game or feature combination is verified.
@@ -15,7 +15,7 @@ not done. ⛔ **Out of scope**: outside this toolkit's data/managed-IL approach.
 | Unity Mono games, Unity 2019.x – 2020.1 | ✅ Works | Runs the data on a 2021.3 player ([LEGACY-UNITY.md](LEGACY-UNITY.md)). Tested on Outer Wilds (2019.4). Several times the work of a normal port. |
 | Built-in render pipeline | ✅ Works | |
 | URP | ◐ Partial | Vertex/pixel shaders translate; no URP game fully verified yet. |
-| HDRP | ❌ Not yet | Selected compute formats now convert; HDRP-specific passes and full-pipeline gameplay remain unverified (Lethal Company is not ported). |
+| HDRP | ◐ Experimental | Lethal Company v81 runs locally in an experimental build with rendering gaps. |
 | Unity IL2CPP games | ⛔ Out of scope | Game code is compiled Windows native code; this toolkit does not translate it. |
 
 ### Graphics
@@ -51,7 +51,8 @@ not done. ⛔ **Out of scope**: outside this toolkit's data/managed-IL approach.
 
 | Feature | Status | Notes / limits |
 |---|---|---|
-| Go/no-go game inspector | ✅ Works | `inspect_game.py`: Unity version, scripting backend, pipeline, plugins. |
+| Go/no-go game inspector | ✅ Works | `tools/metalport check` reports Unity version, scripting backend, pipeline, shaders and plugins from downloaded data. |
+| Thunderstore mod profiles | ◐ Partial | [mp-mods](MODS.md) imports, launches and shares profiles, toggles packages and checks dependencies. |
 | Shader coverage report | ◐ Partial | Per-shader translation coverage and Metal compile checks. |
 | In-game diagnostics | ✅ Works | Live commands (camera/effect toggles, layer dumps, object lookup), hidden test runs ([LEGACY-UNITY.md](LEGACY-UNITY.md#debug-kit-also-useful-for-new-player-ports)). |
 | Benchmark from a Metal trace | ✅ Works | `bench_trace.py`: FPS, 1 % lows, render size, GPU and CPU load; works for CrossOver builds too. |
@@ -66,13 +67,10 @@ Details per game: [games/](../games).
 | R.E.P.O. | Unity 6000.3, Mono | ✅ Playable | depot 3241661, manifest 4238581831212146714 (v0.5.2) | Color grading off. |
 | Outer Wilds | Unity 2019.4 on the 2021.3 player | ◐ Playable with issues | depot 753641, manifest 2759471679100125861 | Giant's Deep surface renders black from afar. |
 | ULTRAKILL | Unity 2022.3, Mono | ◐ In progress | depot 1229491, manifest 22957324 | Installed Level 0-1 renders normally (user-confirmed). Palette compute tested in an isolated scene comparison; installed build keeps its fallback. Full campaign and exact palette parity remain unverified. |
-| Lethal Company | Unity 2022.3, HDRP | ❌ Not ported | depot 1966721, manifest 6423525044216269478 | Coverage after translator fixes: 11,188/11,188 graphics programs translate (100%); 11,101 compile on Metal (99.2%). Compute: 112/122 objects, 589 kernel variants. Remaining: 87 graphics programs fail compilation, geometry/tessellation stages and 10 compute objects are unsupported or fail conversion. HDRP gameplay remains untested ([details](../games/lethal-company.json)). |
+| Lethal Company | Unity 2022.3, Mono, HDRP | ◐ Experimental port | Local v81 build | Modded LAN landing and casino spawn verified. Rendering parity and Windows multiplayer remain open. [Runtime and shader results](../games/lethal-company.json). |
 
 Lethal Company's previous coverage was 7,570 translated and 5,943 Metal-validated programs. The fixes reconstruct stripped buffer reflection,
 read structured-buffer strides from bytecode, and distinguish texture arrays from multisampled textures so array index and mip level remain separate.
-Rebuild an existing local translator with `sh tools/build_hlslcc.sh` after updating. These are static compilation results, not a playable-port claim.
+Rebuild an existing local translator with `sh tools/build_hlslcc.sh` after updating. These figures describe static compiler coverage for the recorded depot manifest.
 
-## Roadmap (not started)
-
-2. Post-processing v2 color grading on Metal.
-3. HDRP (Lethal Company).
+See the [roadmap](ROADMAP.md) for remaining work.

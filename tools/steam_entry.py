@@ -383,13 +383,21 @@ def status(steam: Path = STEAM) -> str:
     return "off"
 
 
+def steam_app_info(appid: int, steam: Path = STEAM) -> dict:
+    """Read one app record from the local Steam client cache."""
+    _, strings, records = read_cache(steam / "appcache/appinfo.vdf")
+    raw = next((record for app, record in records if app == appid), None)
+    if raw is None:
+        return {}
+    return parse(raw[68:], strings).get("appinfo", (0, {}))[1]
+
+
 def steam_name(appid: int, steam: Path = STEAM) -> str:
     """The game's name as Steam's app cache has it (needed so the Mac entry matches Steam's record)."""
-    _, strings, records = read_cache(steam / "appcache/appinfo.vdf")[:3]
-    raw = next((r for a, r in records if a == appid), None)
-    if raw is None:
+    info = steam_app_info(appid, steam)
+    if not info:
         raise SteamEntryError(f"Steam has no data for app {appid} yet. Open its page in Steam once, quit Steam, then try again")
-    return parse(raw[68:], strings)["appinfo"][1]["common"][1]["name"][1]
+    return info["common"][1]["name"][1]
 
 
 def main(argv: list) -> int:

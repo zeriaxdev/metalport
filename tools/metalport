@@ -2,6 +2,8 @@
 """metalport: port a Windows Unity (Mono) game to a native Apple Silicon app in one command.
 
 usage:
+  metalport lookup <game name | steam app id>
+  metalport check <steam app id | game folder>
   metalport port <steam app id | game folder> [--name NAME] [--appid ID] [--steam-play] [--mods]
                  [--allow-incomplete] [--replace] [-v]
 
@@ -13,6 +15,8 @@ Output: ports/<Name>/<Name>.app (+ shader reports). Every run writes a full log 
 import argparse, json, os, re, subprocess, sys, threading, time
 ANSI = re.compile(r'\x1b\[[0-9;]*m')
 from pathlib import Path
+from urllib.parse import urlencode
+from steam_entry import SteamEntryError, steam_app_info
 
 ROOT = Path(__file__).resolve().parent.parent
 TOOLS = ROOT / 'tools'
@@ -98,22 +102,29 @@ def python_env(run, args):
     run.py = str(py); return '.venv ready'
 
 
+def find_steam_data(appid):
+    cands = []
+    for base in (STEAM / 'steamapps/content', STEAM / 'Steam.AppBundle/Steam/Contents/MacOS/steamapps/content'):
+        cands += sorted((base / f'app_{appid}').glob('depot_*/*_Data'))
+    acf = STEAM / f'steamapps/appmanifest_{appid}.acf'
+    if acf.exists():
+        m = re.search(r'"installdir"\s+"([^"]+)"', acf.read_text(errors='replace'))
+        if m: cands += sorted((STEAM / 'steamapps/common' / m.group(1)).glob('*_Data'))
+    return cands[0] if cands else None
+
+
 def find_game(run, args):
     t = Path(args.target).expanduser()
     if t.is_dir():
         data = t if t.name.endswith('_Data') else next(iter(sorted(t.glob('*_Data'))), None)
         if not data: raise Fail(f'no *_Data folder in {t}')
     elif args.target.isdigit():
-        cands = []
-        for base in (STEAM / 'steamapps/content', STEAM / 'Steam.AppBundle/Steam/Contents/MacOS/steamapps/content'):
-            cands += sorted((base / f'app_{args.target}').glob('depot_*/*_Data'))
-        acf = STEAM / f'steamapps/appmanifest_{args.target}.acf'
-        if acf.exists():
-            m = re.search(r'"installdir"\s+"([^"]+)"', acf.read_text(errors='replace'))
-            if m: cands += sorted((STEAM / 'steamapps/common' / m.group(1)).glob('*_Data'))
-        if not cands:
-            raise Fail(f"not downloaded. In Steam's console (open steam://open/console): download_depot {args.target} {int(args.target) + 1}")
-        data = cands[0]; args.appid = args.appid or args.target
+        data = find_steam_data(args.target)
+        if data is None:
+            raise Fail(f"no local Windows data found for {args.target}. See "
+                       f"https://steamdb.info/app/{args.target}/depots/ for depot hints, then use "
+                       f"app_info_print {args.target} in Steam's console to confirm the Windows depot and manifest.")
+        args.appid = args.appid or args.target
     else:
         raise Fail(f'{args.target}: not a folder or a Steam app id')
     run.data = data; run.name = args.name or data.name[:-len('_Data')]
@@ -122,12 +133,13 @@ def find_game(run, args):
 
 
 def inspect(run, args):
-    out = run.must(run.py, TOOLS / 'inspect_game.py', run.data.parent, what='inspect_game.py')
+    out = run.must(run.py, TOOLS / 'inspect_game.py', run.data, what='inspect_game.py')
     field = lambda k: (re.search(rf'^{k}\s*:\s*(.*)$', out, re.M) or [None, ''])[1].strip()
     run.unity, backend = field('Unity version'), field('Scripting backend')
     run.plugins = field('Native plugins').lower()
     run.summary['inspect'] = {k: field(k) for k in ('Unity version', 'Scripting backend', 'Shaders', 'Compute shaders', 'Render pipeline', 'Native plugins')}
     if 'IL2CPP' in backend: raise Fail('IL2CPP game: its code is compiled Windows code, which this toolkit cannot port')
+    if args.cmd == 'check' and backend != 'Mono': raise Fail('could not confirm a Mono scripting backend')
     if not re.match(r'\d+\.\d+', run.unity): raise Fail('could not read the Unity version')
     major, minor = (int(x) for x in run.unity.split('.')[:2])
     if (major, minor) < (2020, 2): raise Fail(f'Unity {run.unity} has no Apple Silicon player: see docs/LEGACY-UNITY.md')
@@ -173,9 +185,104 @@ def launcher(run, args):
     return f'Steam app {args.appid}, signed'
 
 
+def store_json(endpoint, **parameters):
+    query = urlencode({"l": "english", "cc": "US", **parameters})
+    try:
+        response = subprocess.run(
+            ["/usr/bin/curl", "-fsS", "--max-time", "12",
+             f"https://store.steampowered.com/api/{endpoint}/?{query}"],
+            capture_output=True, check=True,
+        )
+        return json.loads(response.stdout)
+    except (OSError, subprocess.CalledProcessError, ValueError) as error:
+        raise Fail("Steam Store lookup failed. Try again or use an app ID.") from error
+
+
+def lookup(query):
+    query = query.strip()
+    if not query:
+        raise Fail("Enter a game name or Steam app ID.")
+    if query.isascii() and query.isdecimal():
+        appid = str(int(query))
+    else:
+        results = store_json("storesearch", term=query).get("items", [])
+        exact = [item for item in results if item["name"].casefold() == query.casefold()]
+        matches = exact or results
+        if not matches:
+            raise Fail(f"No Steam Store results for {query!r}. Try an app ID.")
+        if len(matches) > 1:
+            for item in matches[:5]:
+                print(f'{item["id"]}  {item["name"]}')
+            print("Run metalport lookup <app id> to select a match.")
+            return
+        appid = str(matches[0]["id"])
+
+    entry = store_json("appdetails", appids=appid).get(appid, {})
+    details = entry.get("data", {}) if entry.get("success") else {}
+    try:
+        info = steam_app_info(int(appid), STEAM)
+    except (SteamEntryError, OSError):
+        info = {}
+    cached_name = info.get("common", (0, {}))[1].get("name", (1, ""))[1]
+    local = find_steam_data(appid)
+    if not (details or info or local):
+        raise Fail(f"Steam did not return app {appid}. Check the ID.")
+    print(f'{details.get("name") or cached_name or "Steam app"} ({appid})')
+    if details.get("type") not in (None, "game", "demo"):
+        print(f'No game port to assess: Steam lists this app as {details["type"]}.')
+        return
+    platforms = details.get("platforms", {})
+    if platforms.get("mac") is True:
+        print("Mac build listed by Steam. Check the official build first.")
+        return
+    if platforms.get("windows") is False:
+        print("Windows build unavailable on the Steam Store.")
+        return
+
+    depots = info.get("depots", (0, {}))[1]
+    for depot_id, (_, depot) in depots.items():
+        if not depot_id.isdecimal() or not isinstance(depot, dict):
+            continue
+        config = depot.get("config", (0, {}))[1]
+        oslist = config.get("oslist", (1, ""))[1].split(",")
+        public = depot.get("manifests", (0, {}))[1].get("public", (0, {}))[1]
+        manifest = public.get("gid", (1, ""))[1]
+        if manifest and ("windows" in oslist or oslist == [""]):
+            print(f"  Steam client cache: depot {depot_id}, public manifest {manifest}")
+
+    if local is not None:
+        return check_game(argparse.Namespace(cmd="check", target=appid), appid)
+    print("Unknown: Steam Store metadata cannot verify the Unity backend or shader inputs.")
+    print(f"  Steam console: app_info_print {appid}")
+    print(f"  After downloading the Windows depot: tools/metalport check {appid}")
+
+
+def check_game(args, slug):
+    args.appid = args.name = None
+    run = Run(f'check-{slug}', False)
+    steps = [('Find game', find_game), ('Python environment', python_env), ('Go/no-go check', inspect)]
+    run.total = len(steps)
+    for label, fn in steps:
+        run.step(label, lambda r, fn=fn: fn(r, args))
+    for label, value in run.summary['inspect'].items():
+        print(f'  {label}: {value}')
+    if 'HDRP' in run.summary['inspect']['Render pipeline']:
+        print('  Experimental: HDRP still needs shader and runtime validation.')
+    elif 'D3D11:' not in run.summary['inspect']['Shaders']:
+        print('  Unknown: no D3D11 variants reported. Check the available shader inputs.')
+    else:
+        print('  Candidate: Mono and D3D11 found. Shader compilation, native dependencies and gameplay still need testing.')
+    run.finish('ok')
+
+
 def main():
     ap = argparse.ArgumentParser(prog='metalport', description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument('--version', action='version', version=f'%(prog)s {(ROOT / "VERSION").read_text().strip()}')
     sub = ap.add_subparsers(dest='cmd', required=True)
+    look = sub.add_parser('lookup', help='search Steam and report available port eligibility evidence')
+    look.add_argument('query', nargs='+', help='game name or Steam app ID')
+    scan = sub.add_parser('check', help='inspect downloaded game data without building a port')
+    scan.add_argument('target', help='Steam app id with a local depot or a game folder')
     p = sub.add_parser('port', help='port a game')
     p.add_argument('target', help='Steam app id or game folder'); p.add_argument('--name'); p.add_argument('--appid')
     p.add_argument('--steam-play', action='store_true', help='add the Steam Play button + Steam Cloud (quits and reopens Steam)')
@@ -184,7 +291,12 @@ def main():
     p.add_argument('--replace', action='store_true', help='move an existing app to the Trash first')
     p.add_argument('-v', '--verbose', action='store_true', help="stream every tool's output")
     args = ap.parse_args()
-    run = Run(re.sub(r'[^A-Za-z0-9]+', '-', Path(args.target).name).strip('-') or 'game', args.verbose)
+    if args.cmd == 'lookup':
+        return lookup(' '.join(args.query))
+    slug = re.sub(r'[^A-Za-z0-9]+', '-', Path(args.target).name).strip('-') or 'game'
+    if args.cmd == 'check':
+        return check_game(args, slug)
+    run = Run(slug, args.verbose)
     steps = [('Python environment', python_env), ('Find game', find_game), ('Go/no-go check', inspect),
              ('Unity Mac player', unity_player), ('Translate shaders + build app', build), ('Native stand-ins', natives),
              ('Launcher + signing', launcher)]
@@ -199,4 +311,5 @@ def main():
 
 if __name__ == '__main__':
     try: main()
+    except Fail as error: sys.exit(str(error))
     except KeyboardInterrupt: print('\n  interrupted'); sys.exit(130)

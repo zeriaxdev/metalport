@@ -10,34 +10,21 @@ game's own Windows data in Unity's Mac player and translates its shaders from Di
 > You must own each game you port and comply with its license terms; do not share the result. The MIT license covers only this toolkit
 > (see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)). Product names and trademarks belong to their respective owners.
 
-## Status
+## Game compatibility
 
-| Game | State |
-|---|---|
-| R.E.P.O. | ✅ Playable: ~110–130 fps at 3024×1898 (M5), Steam overlay, online hosting, Steam Cloud, mods |
-| Outer Wilds | ◐ Playable with one rendering issue |
-| ULTRAKILL | ◐ In progress |
-| Lethal Company | ❌ Not ported (HDRP; shader coverage measured) |
-
-Full feature list, limits and verified versions: **[docs/FEATURES.md](docs/FEATURES.md)**.
-
-## Does my game qualify?
-
-- **Unity with Mono** (the game folder has `<Game>_Data/Managed/*.dll`). IL2CPP and Unreal games can't be ported this way.
-- **Unity 2020.2 or newer.** Unity 2019–2020.1 needs the [legacy path](docs/LEGACY-UNITY.md).
-- **Built-in or URP rendering.** HDRP isn't supported yet.
-
-`tools/metalport` checks all of this first and stops with a plain reason.
+[Game status and verified versions](games/README.md) tracks playable ports, experiments, and pending checks. Start with a Unity Mono game that uses Built-in or URP rendering. Unity 2019–2020.1 uses the [legacy path](docs/LEGACY-UNITY.md). HDRP is experimental. Windows IL2CPP builds are outside this pipeline.
 
 ## Quick start
 
 Requirements: Apple Silicon Mac, Xcode command line tools, Python 3, CMake, Steam with the game in your library.
 
 ```sh
-tools/metalport port <steam app id | game folder>
+tools/metalport lookup "Bopl Battle"
+tools/metalport check "/path/to/Windows game folder"
+tools/metalport port "/path/to/Windows game folder"
 ```
 
-Writes `ports/<Game>/<Game>.app`, one status line per step. Useful options:
+The lookup accepts a Steam app ID as well as a name. The check and port commands accept an app ID if its Windows depot is already downloaded. The port writes `ports/<Game>/<Game>.app`, one status line per step. Useful options:
 
 | Option | Effect |
 |---|---|
@@ -53,8 +40,7 @@ Each run leaves a full log and a JSON summary in `~/Library/Logs/metalport/`. Th
 
 - **Start** the app by double-click or Steam's Play button. Steam must be running and signed in to the account that owns the game.
 - **Metal HUD** (fps, GPU time): add `-hud` to the game's Steam Launch Options.
-- **Mods** are off unless asked for: install them with [r2modmac](https://github.com/Zard-Studios/r2modmac) ("Apply to Game") or
-  `tools/mods <app> add <Author-Mod>`, then add `-mods` to Steam's Launch Options.
+- **Mods** are opt-in. Enable BepInEx with `--mods` at build time or `tools/mods "/path/to/Game.app" install`. Manage named Thunderstore profiles with [mp-mods](docs/MODS.md). For mods applied by r2modmac, use `-mods` in Steam Launch Options.
 
 ## Documentation
 
@@ -65,6 +51,11 @@ Each run leaves a full log and a JSON summary in `~/Library/Logs/metalport/`. Th
 | [PORTING-A-NEW-GAME.md](docs/PORTING-A-NEW-GAME.md) | go/no-go checklist, debugging |
 | [LEGACY-UNITY.md](docs/LEGACY-UNITY.md) | Unity 2019 games on the 2021 player |
 | [COMPUTE-SHADERS.md](docs/COMPUTE-SHADERS.md), [SHADER-CHECKS.md](docs/SHADER-CHECKS.md) | shader translation and coverage checks |
-| `GAME-NOTES-*.md`, [games/](games) | per-game notes and data |
+| [MODS.md](docs/MODS.md) | install, toggle, test and share mod profiles |
+| [Game tracker](games/README.md), [roadmap](docs/ROADMAP.md) | per-game status, known blockers and contribution priorities |
+
+## Versioning
+
+[VERSION](VERSION) is the toolkit version. During `0.x`, bump the minor version for new commands or CLI changes, and the patch version for compatible fixes. Reserve `1.0.0` for a stable command-line interface. Game build and depot versions are tracked independently. [Semantic Versioning](https://semver.org/) · [Game tracker](games/README.md)
 
 Changes: [CHANGELOG.md](CHANGELOG.md). License: [MIT](LICENSE).

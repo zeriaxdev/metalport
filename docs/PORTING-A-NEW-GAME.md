@@ -1,12 +1,25 @@
 # Porting another Unity game
 
-## 1. Go / no-go (5 minutes)
-Download the Windows build (Steam Mac can't install Windows-only games; use the Steam console: `download_depot <appid> <depotid> <manifest>`; get ids with `app_info_print <appid>`; the depot lands in
-`~/Library/Application Support/Steam/.../steamapps/content/app_<id>/depot_<id>`), then:
+## Find candidates before downloading
+
+Start with `tools/metalport lookup "Bopl Battle"` or pass a Steam app ID. It searches the Steam Store's English-language US catalog and reads public depot IDs and manifests already cached by the local Steam client. When Windows game data is present, it runs the normal eligibility check. A store result alone leaves the backend and shader inputs unknown. The lookup does not fetch game files or use SteamDB.
+
+1. Open [SteamDB Instant Search](https://steamdb.info/instantsearch/). Select **Technologies → Unity** and **Platforms → Windows**. Check the list of [detected Mono titles](https://steamdb.info/tech/SDK/Mono/) for more leads. Technology detection can mix platforms and branches.
+2. Open the app's **Depots** page. Check for an official macOS build first. On the intended Windows branch, open the depot's file list if available. Look for both `Managed/Assembly-CSharp.dll` and the Mono runtime. If the title also has IL2CPP, check the exact branch you plan to use. Schedule I, for example, has a separate Mono branch.
+3. Compare likely work. A small game with local play and few native plugins makes a good first test. For a co-op game, budget time for a real host/join test, voice chat and saves. Required Windows-only plugins, native Burst jobs, recording/encoding, middleware and unsupported shader features can each hold up a Mono port. The [game tracker](../games/README.md#public-candidates) shows examples.
+
+## 1. Check the Windows build
+
+1. Find the Steam app ID and open its depots page, for example [Lethal Company on SteamDB](https://steamdb.info/app/1966720/depots/). Look for a Windows depot. A technology tag or listed macOS depot is a clue. Both the backend and the pipeline can change across builds. Valve's publisher depot-version API requires a publisher key. [Steamworks API documentation](https://partner.steamgames.com/doc/webapi/ISteamApps#GetAppDepotVersions)
+2. In the Steam console (`steam://open/console`), run `app_info_print <app ID>` to confirm the Windows depot and manifest. For a game you own, run `download_depot <app ID> <depot ID> <manifest ID>`. Use the path Steam prints. Depot IDs are assigned independently of app IDs.
+3. Inspect that depot locally.
 
 ```sh
-.venv/bin/python tools/inspect_game.py "<depot folder>"
+tools/metalport check "/path/to/Windows depot"
 ```
+
+Typical Mono builds have `<Game>_Data/Managed/Assembly-CSharp.dll`. `GameAssembly.dll` with `il2cpp_data/Metadata/global-metadata.dat` indicates IL2CPP. URP and HDRP assemblies are useful hints about the render pipeline. This step reports the local build. Shader compile results and a gameplay test establish compatibility.
+
 | Report line | Meaning |
 |---|---|
 | Scripting backend: **IL2CPP** | stop — game logic is native Windows code (needs a different approach) |
@@ -21,7 +34,13 @@ Quick check of required Unity version: `strings <Data>/globalgamemanagers | head
 [LEGACY-UNITY.md](LEGACY-UNITY.md) instead (runs the data on a 2021.3 player; several times the work).
 
 ## 2. Run the pipeline
-See the README quick start. Use a fresh output folder: `tools/port.py` refuses an existing app. Shader translation and Metal compilation must pass before assembly; loose and bundled shaders are patched in the copied app. See [SHADER-CHECKS.md](SHADER-CHECKS.md) for JSON reports, failure statuses and explicit incomplete experiments.
+Build from the checked folder.
+
+```sh
+tools/metalport port "/path/to/Windows depot" --appid 1966720
+```
+
+Replace the example app ID with the game's ID. Use a fresh output folder. Start by launching vanilla and checking the title screen, a gameplay scene, input, audio and saves. Test Steam services separately before enabling mods. If you use `--allow-incomplete`, record missing shaders in the [game tracker](../games/README.md). Shader translation and Metal compilation must pass before assembly; loose and bundled shaders are patched in the copied app. See [SHADER-CHECKS.md](SHADER-CHECKS.md) for JSON reports, failure statuses and explicit incomplete experiments.
 
 ## 3. Native plugins
 List: `ls <Data>/Plugins/x86_64`. For each, find the P/Invoke library *name* the managed code uses (`strings <Data>/Managed/*.dll | grep -i <name>`), then decide:

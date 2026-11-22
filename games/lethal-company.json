@@ -10,10 +10,10 @@
     "download_gb": 0.6
   },
   "supported_versions": "none",
-  "status": "not ported; coverage measured 2026-11-21 after translator fixes: 100% of graphics programs translate, 99.2% compile on Metal; 112 of 122 compute shaders convert",
+  "status": "experimental native port; v81 locally launches and the modded casino spawns on Gordion",
   "owner": "-",
   "known_issues": [
-    "Full HDRP compatibility and gameplay have not been validated with the current compute converter",
+    "HDRP rendering parity and shader compatibility with Windows-built mod bundles remain open",
     "87 graphics programs still fail Metal compilation; geometry/tessellation stages remain unsupported",
     "10 compute objects remain unsupported or fail conversion: 6 have no kernel variants, 1 is Vulkan-only, 3 fail Metal compilation"
   ],
@@ -27,5 +27,9 @@
     "validation": "Native M5 Metal compiler; full scan completed with 115 issue occurrences (103 graphics compilation, 7 unsupported compute, 3 compute compilation, 2 unsupported-stage). Preflight remains incomplete and exits 2. Cold verification used two low-priority workers with 16-source batches to avoid the checker's 120-second batch timeout; compiler options and validation checks were unchanged. A cache-warm rerun of the ordinary xlate_all.py CLI reproduced the same translation, Metal, compute and failure totals.",
     "plugins": "steam_api64, discord_game_sdk, Dissonance (AudioPluginDissonance + opus), phonon_fmod (Steam Audio), OpenXR (VR only)",
     "next": "Investigate the remaining compiler failures and HDRP/native-plugin compatibility in an isolated build; full gameplay and rendering parity are unverified"
+  },
+  "runtime_validation": {
+    "tested": "An Apple Silicon clone of the existing v81 port hosted LAN and landed on Gordion. The casino building, slots, roulette and blackjack spawned with LethalCasino 1.1.3 and Casino v81 Patch 1.0.0.",
+    "scope": "Reproduction with the stock port command, machine interaction, rendering parity and Windows multiplayer are open."
   }
 }

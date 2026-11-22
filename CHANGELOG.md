@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.0 (2026-11-23)
+- Add `metalport lookup` for Steam title and app ID searches, cached Steam depots, and local eligibility checks. Add `metalport check` for downloaded Windows game data.
+- Add `mp-mods` for named Thunderstore profiles, reversible mod toggles, dependency checks, and share-code reuse for unchanged exports. Named profiles can launch through Steam on configured ports.
+- Fix integer texture handling, resource binding alignment, and multisampled texture array reads during shader translation.
+- Expand the porting tutorial and compatibility tracker, including the local Lethal Company v81 smoke test and its open rendering and multiplayer issues.
+
 ## 0.6.0 (2026-11-21)
 - Opt-in ULTRAKILL scene comparison (`tests/gameplay`): isolated app/profile copies, natural camera capture, dark/solid-frame rejection,
   palette compute OFF/ON dispatch checks and measured pixel differences. The targeted M5/Metal run completes with 99.61% identical
