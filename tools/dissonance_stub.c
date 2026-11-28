@@ -9,11 +9,13 @@
 // sends background noise, lower it if quiet speech is cut. Upgrade path: bind real WebRTC audio processing.
 #include <math.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #define EXPORT __attribute__((visibility("default")))
-typedef struct { int speech; int hang; float threshold; int vad_level; int muted; } Pre;
+typedef struct { int speech; int hang; float threshold; int vad_level; int muted; int frames; float peak; } Pre;
 
 static float threshold_from_env(void) {
     const char* e = getenv("MP_VAD_DB"); double db = e ? atof(e) : -48.0;
@@ -22,9 +24,25 @@ static float threshold_from_env(void) {
     return (float)pow(10.0, db / 20.0);
 }
 
+// Diagnostics: ~/Library/Logs/metalport/dissonance-stub.log (or $MP_DISSONANCE_LOG): preprocessor creation, speech start/stop and a
+// 5 s summary (frames, loudest frame in dBFS). Low volume on purpose; it answers "does the game get my voice and does the gate open".
+static void note(const char* fmt, double a, double b, double c) {
+    static char path[1024]; static int init;
+    if (!init) {
+        init = 1; const char* e = getenv("MP_DISSONANCE_LOG"); const char* home = getenv("HOME");
+        if (e && *e) snprintf(path, sizeof path, "%s", e); else if (home) snprintf(path, sizeof path, "%s/Library/Logs/metalport/dissonance-stub.log", home);
+    }
+    if (!path[0]) return;
+    FILE* f = fopen(path, "a"); if (!f) return;
+    time_t t = time(NULL); struct tm tm; localtime_r(&t, &tm); char ts[16]; strftime(ts, sizeof ts, "%H:%M:%S", &tm);
+    fprintf(f, "%s ", ts); fprintf(f, fmt, a, b, c); fputc('\n', f); fclose(f);
+}
+
 EXPORT void* Dissonance_CreatePreprocessor(int noise, int aec, int a, int b, int c, int routing, int d) {
     (void)noise; (void)aec; (void)a; (void)b; (void)c; (void)routing; (void)d;
-    Pre* p = calloc(1, sizeof *p); if (p) p->threshold = threshold_from_env(); return p;
+    Pre* p = calloc(1, sizeof *p); if (p) p->threshold = threshold_from_env();
+    if (p) note("preprocessor created, gate %.1f dBFS", 20.0 * log10(p->threshold), 0, 0);
+    return p;
 }
 EXPORT void Dissonance_DestroyPreprocessor(void* h) { free(h); }
 EXPORT void Dissonance_ConfigureNoiseSuppression(void* h, int level) { (void)h; (void)level; }
@@ -41,9 +59,13 @@ EXPORT int Dissonance_PreprocessCaptureFrame(void* h, int rate, float* in, float
     (void)delay_ms; Pre* p = h; if (!p || !in || !out) return -5;
     if (rate != 8000 && rate != 16000 && rate != 32000 && rate != 48000) return -7;
     int n = rate / 100; double sum = 0; for (int i = 0; i < n; i++) sum += (double)in[i] * in[i];
-    float rms = (float)sqrt(sum / n);
-    if (!p->muted && rms > p->threshold) { p->speech = 1; p->hang = 25; }       // 250 ms hang-over
+    float rms = (float)sqrt(sum / n); int was = p->speech;
+    // The game reports "output muted" while it is NOT transmitting, so muted must not gate detection (it would never start).
+    if (rms > p->threshold) { p->speech = 1; p->hang = 25; }                      // 250 ms hang-over
     else if (p->hang > 0) p->hang--; else p->speech = 0;
+    if (rms > p->peak) p->peak = rms;
+    if (p->speech != was) note(p->speech ? "speech start (frame %.1f dBFS)" : "speech stop (frame %.1f dBFS)", 20.0 * log10(rms + 1e-9), 0, 0);
+    if (++p->frames % 500 == 0) { note("5 s: %.0f frames, loudest %.1f dBFS", 500, 20.0 * log10(p->peak + 1e-9), 0); p->peak = 0; }
     if (out != in) memcpy(out, in, (size_t)n * sizeof(float));
     return 0;
 }
