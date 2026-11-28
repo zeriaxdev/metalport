@@ -4,7 +4,7 @@ set -e; cd "$(dirname "$0")"; here=$(pwd); mkdir -p .build; cd .build
 REV=3ea1fcd6bd0ac445bc078de0bf32f0950188577b   # pinned HLSLcc commit (MIT-style license + bstring BSD notice, see THIRD-PARTY-NOTICES.md)
 [ -d HLSLcc ] || { git init -q HLSLcc && git -C HLSLcc fetch -q --depth 1 https://github.com/Unity-Technologies/HLSLcc.git $REV && git -C HLSLcc checkout -q FETCH_HEAD; }
 (cd HLSLcc
- for file in hlslcc-structured-stride.patch hlslcc-msaa-array.patch; do
+ for file in hlslcc-structured-stride.patch hlslcc-msaa-array.patch hlslcc-metal-minprecision.patch; do
      if ! patch -R -p1 -F 0 -f -s --dry-run < "$here/$file" >/dev/null 2>&1; then
          patch -p1 -F 0 -f < "$here/$file"
      fi

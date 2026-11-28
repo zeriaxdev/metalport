@@ -27,7 +27,9 @@ def main(argv=None):
     if Path(args.data).resolve() in app.parents:
         parser.error('The output app must be outside the source Data directory')
     run = lambda *command: subprocess.run(command, check=True)
-    if not (here / 'h2m').exists():
+    translator = here / 'h2m'
+    build_inputs = [here / 'build_hlslcc.sh', here / 'h2m.cpp', *here.glob('hlslcc-*.patch')]
+    if not translator.is_file() or any(path.stat().st_mtime_ns > translator.stat().st_mtime_ns for path in build_inputs):
         run('sh', str(here / 'build_hlslcc.sh'))
     output.mkdir(parents=True, exist_ok=True)
     run(sys.executable, str(here / 'xlate_all.py'), args.data,
