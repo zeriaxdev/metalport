@@ -1,0 +1,19 @@
+diff --git a/src/toMetalInstruction.cpp b/src/toMetalInstruction.cpp
+--- a/src/toMetalInstruction.cpp
++++ b/src/toMetalInstruction.cpp
+@@ -217,8 +217,13 @@ void ToMetal::AddMOVBinaryOp(const Operand *pDest, Operand *pSrc, uint32_t precise)
+     int srcSwizzleCount = pSrc->GetNumSwizzleElements();
+     uint32_t writeMask = pDest->GetAccessMask();
+ 
+-    const SHADER_VARIABLE_TYPE eSrcType = pSrc->GetDataType(psContext, pDest->GetDataType(psContext));
++    const SHADER_VARIABLE_TYPE eDestType = pDest->GetDataType(psContext);
++    const SHADER_VARIABLE_TYPE eSrcType = pSrc->GetDataType(psContext, eDestType);
+     uint32_t flags = SVTTypeToFlag(eSrcType);
+ 
+-    AddAssignToDest(pDest, eSrcType, srcSwizzleCount, precise, numParenthesis);
++    // Operand flags promote narrow integers to int/uint. Match the assignment
++    // to the emitted expression when moving between equally narrow registers.
++    const bool narrowIntegerMove = eSrcType == eDestType && (eSrcType == SVT_INT16 || eSrcType == SVT_UINT16);
++    const SHADER_VARIABLE_TYPE eExpressionType = narrowIntegerMove ? TypeFlagsToSVTType(flags) : eSrcType;
++    AddAssignToDest(pDest, eExpressionType, srcSwizzleCount, precise, numParenthesis);
+     glsl << TranslateOperand(pSrc, flags, writeMask);
