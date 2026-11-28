@@ -53,6 +53,11 @@ Each run leaves a full log and a JSON summary in `~/Library/Logs/metalport/`. Th
 | [COMPUTE-SHADERS.md](docs/COMPUTE-SHADERS.md), [SHADER-CHECKS.md](docs/SHADER-CHECKS.md) | shader translation and coverage checks |
 | [MODS.md](docs/MODS.md) | install, toggle, test and share mod profiles |
 | [Game tracker](games/README.md), [roadmap](docs/ROADMAP.md) | per-game status, known blockers and contribution priorities |
+| [UPSTREAM-AUDIT.md](docs/UPSTREAM-AUDIT.md) | what other Unity-on-Mac projects do that may help, with licenses and open hypotheses |
+
+## Tests
+
+`python3 -m unittest discover tests` needs no game, Unity player or Steam (`pip install -r requirements.txt` first); Metal and gameplay tests are opt-in. `python3 tools/check_no_game_files.py` fails if game, Unity or Valve files are tracked. CI runs both. Read-only diagnostics: `tools/dump_common_params.py` (shared shader parameters) and `tools/quality_vsync.py` (vSync per quality level).
 
 ## Versioning
 

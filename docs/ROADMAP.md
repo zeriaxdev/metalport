@@ -3,7 +3,7 @@
 ## Verify first
 
 1. Address remaining HDRP graphics and compute failures on representative scenes. Extend the existing [shader checks](SHADER-CHECKS.md) with focused regressions for depth resolve and incorrect resource bindings. Geometry, tessellation, and DXIL require their own feasibility checks.
-2. Reproduce the reported Lethal Company tearing in vanilla with in-game VSync enabled. Compare ProMotion and fixed 60 Hz, then windowed and fullscreen at the same refresh rate. Record Metal HUD presentation mode and frame intervals and check the runtime `CAMetalLayer.displaySyncEnabled` value. Reuse `tools/bench_trace.py` for FPS and 1% lows. Check Retina sizing, cursor hit testing, and macOS Game Mode individually.
+2. Reproduce the reported Lethal Company tearing in vanilla with in-game VSync enabled. Compare ProMotion and fixed 60 Hz, then windowed and fullscreen at the same refresh rate. Record Metal HUD presentation mode and frame intervals and check the runtime `CAMetalLayer.displaySyncEnabled` value. Reuse `tools/bench_trace.py` for FPS and 1% lows. Check Retina sizing, cursor hit testing, and macOS Game Mode individually. Start with `tools/quality_vsync.py <Game.app>` to see which quality levels serialize `vSyncCount=0`: on Metal that turns display sync off, and another port saw a free-running loop from it ([audit](UPSTREAM-AUDIT.md), finding 002). It is a hypothesis for Lethal Company until the runtime value is logged.
 3. Reproduce the [tracked game issues](../games/README.md) one at a time. For Lethal Company, check ship lighting, mod asset shaders, terminal focus, Steam presence, and Windows joins on the exact build.
 
 ## Tooling to explore

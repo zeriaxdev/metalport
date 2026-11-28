@@ -346,8 +346,11 @@ def remove(steam: Path = STEAM) -> str:
             if entry.get("executable", (1, ""))[1] in receipt.get("windows_only", []) and cfg.get("oslist", (1, ""))[1] == "windows":
                 del cfg["oslist"]
                 if not cfg: del entry["config"]
-        ro = tree["appinfo"][1].get("ufs", (0, {}))[1].get("rootoverrides", (0, {}))[1]
+        ufs = tree["appinfo"][1].get("ufs", (0, {}))[1]
+        ro = ufs.get("rootoverrides", (0, {}))[1]
         for k in receipt.get("cloud_keys", []): ro.pop(k, None)
+        if receipt.get("cloud_keys") and not ro:        # add() created this node; leave Steam's record as it was
+            ufs.pop("rootoverrides", None)
         if receipt["oslist"] and "oslist" in common:
             common["oslist"] = (1, ",".join(s for s in common["oslist"][1].split(",") if s and s != "macos"))
         if "osextended" in common:

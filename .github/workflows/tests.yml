@@ -1,0 +1,14 @@
+name: tests
+on: [push, pull_request]
+jobs:
+  asset-free:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+      - run: python tools/check_no_game_files.py
+      # No game data, Unity player or Steam needed. Metal and gameplay tests stay opt-in (RUN_METAL_TESTS=1).
+      - run: python -m unittest discover tests

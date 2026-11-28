@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+- Add asset-free tests for `steam_entry.py` (synthetic Steam cache) and `tools/check_no_game_files.py`, which fails if game, Unity or Valve files are tracked or in a release ZIP; add a GitHub Actions workflow that runs both with the existing tests (not yet run on GitHub).
+- Fix `steam_entry.py remove`: it left an empty `rootoverrides` node in Steam's app cache after Steam Cloud had been added.
+- Add read-only diagnostics `tools/dump_common_params.py` and `tools/quality_vsync.py`, and `docs/UPSTREAM-AUDIT.md` (findings from other Unity-on-Mac projects, with licenses).
+
 ## 0.7.0 (2026-11-23)
 - Add `metalport lookup` for Steam title and app ID searches, cached Steam depots, and local eligibility checks. Add `metalport check` for downloaded Windows game data.
 - Add `mp-mods` for named Thunderstore profiles, reversible mod toggles, dependency checks, and share-code reuse for unchanged exports. Named profiles can launch through Steam on configured ports.
