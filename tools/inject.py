@@ -105,7 +105,11 @@ def patch_shader(tt, stats):
                 stg = ps.get(st) or {}
                 for g, grp in enumerate(stg.get('m_PlayerSubPrograms', [])):
                     for e, pidx in zip(grp, stg['m_ParameterBlobIndices'][g]):
-                        if e['m_BlobIndex'] in mtl and e['m_BlobIndex'] not in users[pidx]: users[pidx].append(e['m_BlobIndex'])
+                        if e['m_GpuProgramType'] not in VS_TYPES | PS_TYPES:
+                            continue
+                        program = e['m_BlobIndex']
+                        if program in mtl and program not in users[pidx]:
+                            users[pidx].append(program)
                         inpass.setdefault(id(ps), set()).add(pidx)
     allocs = {}
     for pids in inpass.values():                           # one free-register allocator per pass (vertex + fragment share $Globals)
