@@ -10,6 +10,7 @@ class DissonanceStub(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.tmp = tempfile.TemporaryDirectory()
+        cls.log = os.environ['MP_DISSONANCE_LOG'] = os.path.join(cls.tmp.name, 'stub.log')
         out = os.path.join(cls.tmp.name, 'libdissonance_stub.dylib')
         subprocess.run(['clang', '-dynamiclib', '-Wno-everything', SRC, '-o', out], check=True)
         lib = cls.lib = ctypes.CDLL(out)
@@ -35,6 +36,18 @@ class DissonanceStub(unittest.TestCase):
         self.assertEqual(lib.Dissonance_GetVadSpeechState(h), 1)       # still inside the 250 ms hang-over
         for _ in range(2): lib.Dissonance_PreprocessCaptureFrame(h, 48000, quiet, quiet, 0)
         self.assertEqual(lib.Dissonance_GetVadSpeechState(h), 0)
+        lib.Dissonance_DestroyPreprocessor(h)
+        text = open(self.log).read()
+        self.assertIn('speech start', text); self.assertIn('speech stop', text)    # the diagnostic log records both edges
+
+    def test_detection_works_while_the_game_reports_output_muted(self):
+        # The game mutes the output until it starts transmitting; detection must still fire or voice activation never starts.
+        lib = self.lib; h = lib.Dissonance_CreatePreprocessor(1, 1, 0, 0, 0, 0, 0)
+        lib.Dissonance_SetAgcIsOutputMutedState.argtypes = [ctypes.c_void_p, ctypes.c_int]
+        lib.Dissonance_SetAgcIsOutputMutedState(h, 1)
+        loud = self.frame(0.2)
+        lib.Dissonance_PreprocessCaptureFrame(h, 48000, loud, loud, 0)
+        self.assertEqual(lib.Dissonance_GetVadSpeechState(h), 1)
         lib.Dissonance_DestroyPreprocessor(h)
 
     def test_audio_passes_through_and_errors_are_reported(self):
