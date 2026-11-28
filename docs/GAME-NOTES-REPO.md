@@ -27,7 +27,7 @@ The Metal HUD (off by default; Steam Launch Options `-hud`, or `HUD=1 tools/laun
 Unity 2022.3, Mono, **HDRP**: 179 graphics shaders compiled for D3D11 in the inspected build. Selected compute conversion now exists, but HDRP-specific passes and full-pipeline gameplay have not been validated. Compute support alone does not establish a working port.
 
 ## Next ideas
-1. Color grading: find why Lut2DBaker's common parameters (`m_CommonParameters`, e.g. `_Lut2D_Params` at offset 448) read as 0 on Metal; then drop the ColorGrading returnfalse patch. Layer dump: `UnityCompat.Diag` cmd `dump <dir>` logs LUT render-texture stats.
+1. Color grading: find why Lut2DBaker's common parameters (`m_CommonParameters`, e.g. `_Lut2D_Params` at offset 448) read as 0 on Metal; then drop the ColorGrading returnfalse patch. Layer dump: `UnityCompat.Diag` cmd `dump <dir>` logs LUT render-texture stats. Checked 2026-11-28 with `tools/dump_common_params.py` (data only, game not run): the D3D11 and Metal parameter entries are identical (`$Globals`, 736 bytes, no own members) and the Metal fragment program reads `_Lut2D_Params` as `cb0_data[28]` (= offset 448), so the layout is not the cause. Next: merge the shared members into the Metal entries of a cloned app and compare LUT stats ([audit](UPSTREAM-AUDIT.md), finding 001).
 2. Translate remaining graphics StructuredBuffer variants (RDEF type `SIT_STRUCTURED` + struct member layout); the corner-square fix is already known and does not depend on this work.
 3. Real voice test, then echo cancellation (WebRTC AEC3 builds for arm64 could replace the pass-through stub).
 4. Finish ULTRAKILL's compute gameplay validation; its existing native port has additional game-specific repairs (see `games/ultrakill.json`).
