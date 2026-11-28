@@ -23,8 +23,8 @@
 The player renders at native Retina resolution and the display's 120 Hz; the laptop can run warm. Use the in-game graphics settings (frame cap/VSync, pixelation, quality) or play windowed at a smaller size.
 The Metal HUD (off by default; Steam Launch Options `-hud`, or `HUD=1 tools/launch.sh …`) shows resolution, fps, GPU ms and presentation mode.
 
-## Lethal Company (inspected, not ported)
-Unity 2022.3, Mono, **HDRP**: 179 graphics shaders compiled for D3D11 in the inspected build. Selected compute conversion now exists, but HDRP-specific passes and full-pipeline gameplay have not been validated. Compute support alone does not establish a working port.
+## Lethal Company (experimental port)
+Unity 2022.3, Mono, **HDRP**. Status, coverage numbers and open issues are in [lethal-company.json](../games/lethal-company.json). Verified so far: the v81 port launches locally, hosts a LAN game and lands on Gordion with LethalCasino mods loaded. Open: HDRP rendering parity, 87 graphics programs that still fail Metal compilation, Windows multiplayer, and the reported tearing (see the [roadmap](ROADMAP.md)).
 
 ## Next ideas
 1. Color grading: find why Lut2DBaker's common parameters (`m_CommonParameters`, e.g. `_Lut2D_Params` at offset 448) read as 0 on Metal; then drop the ColorGrading returnfalse patch. Layer dump: `UnityCompat.Diag` cmd `dump <dir>` logs LUT render-texture stats. Checked 2026-11-28 with `tools/dump_common_params.py` (data only, game not run): the D3D11 and Metal parameter entries are identical (`$Globals`, 736 bytes, no own members) and the Metal fragment program reads `_Lut2D_Params` as `cb0_data[28]` (= offset 448), so the layout is not the cause. Next: merge the shared members into the Metal entries of a cloned app and compare LUT stats ([audit](UPSTREAM-AUDIT.md), finding 001).
