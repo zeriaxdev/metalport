@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """Install macOS stand-ins for the Windows-only native plugins a Unity game ships (the game's x86_64 .dll files cannot load).
-usage: natives.py --app <App>.app [--tweaks] [--steam] [--discord] [--voice]      (then re-sign the app)
+usage: natives.py --app <App>.app [--tweaks] [--steam] [--discord] [--voice] [--dissonance]      (then re-sign the app)
   --tweaks   metalport_tweaks.dylib: mouse scale, App Nap off, first-run shader warm-up (injected by launch.sh)
   --steam    arm64 libsteam_api (borrowed from any installed Steam game) + a shim adding newer flat-API calls; maps steam_api64
   --discord  no-op libdiscord_partner_sdk stand-in (the game stops throwing DllNotFound every frame)
-  --voice    Photon Voice: stock libopus as opus_egpv + pass-through WebRTC/AudioIn stubs (needs `brew install opus`)"""
+  --voice    Photon Voice: stock libopus as opus_egpv + pass-through WebRTC/AudioIn stubs (needs `brew install opus`)
+  --dissonance  Dissonance Voice Chat (Lethal Company): pass-through AudioPluginDissonance stand-in with a loudness-gate speech detector (MP_VAD_DB)"""
 import argparse, glob, os, re, shutil, subprocess, sys
 ap = argparse.ArgumentParser(); ap.add_argument('--app', required=True)
-for f in ('tweaks', 'steam', 'discord', 'voice'): ap.add_argument(f'--{f}', action='store_true')
+for f in ('tweaks', 'steam', 'discord', 'voice', 'dissonance'): ap.add_argument(f'--{f}', action='store_true')
 a = ap.parse_args(); here = os.path.dirname(os.path.abspath(__file__)); C = f'{a.app}/Contents'; P = f'{C}/Plugins'; M = f'{C}/Resources/Data/Managed'
 os.makedirs(P, exist_ok=True); run = lambda *c: subprocess.run(c, check=True)
 cc = lambda src, out, *extra: run('clang', '-dynamiclib', '-arch', 'arm64', '-Wno-everything', src, '-o', out, '-install_name', f'@loader_path/{os.path.basename(out)}', *extra)
@@ -32,6 +33,9 @@ if a.voice:
     for l in ('libopus_egpv', 'libphoton_stub'): sign(f'{P}/{l}.dylib')
     for dll, lib in (('opus_egpv', 'libopus_egpv.dylib'), ('webrtc-audio', 'libphoton_stub.dylib'), ('AudioIn', 'libphoton_stub.dylib')): dllmap(dll, lib)
     print('voice ok')
+if a.dissonance:
+    cc(f'{here}/dissonance_stub.c', f'{P}/libdissonance_stub.dylib'); sign(f'{P}/libdissonance_stub.dylib')
+    dllmap('AudioPluginDissonance', 'libdissonance_stub.dylib'); print('dissonance ok')
 if a.steam:
     need = set()
     for f in glob.glob(f'{M}/*.dll'): need |= {s.decode() for s in strings(f) if re.fullmatch(rb'SteamAPI_Steam\w+_v\d+', s)}
