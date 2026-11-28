@@ -5,6 +5,7 @@ import os
 import platform
 import subprocess
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -61,10 +62,10 @@ def validate_sources(sources):
         atomic_write(path, source)
         pending.append(path)
     failures = {}
-    for start in range(0, len(pending), 128):
-        batch = pending[start:start + 128]
+
+    def run(batch):
         try:
-            result = subprocess.run([str(binary), *map(str, batch)], capture_output=True, timeout=120)
+            result = subprocess.run([str(binary), *map(str, batch)], capture_output=True, timeout=300)
         except (OSError, subprocess.TimeoutExpired) as error:
             raise MetalCheckUnavailable(f'Metal checker failed: {error}') from error
         if result.returncode not in (0, 1):
@@ -77,12 +78,19 @@ def validate_sources(sources):
             assert (result.returncode == 0) == all(row['ok'] for row in rows)
         except (ValueError, KeyError, AssertionError, TypeError) as error:
             raise MetalCheckUnavailable('Incomplete/invalid response from Metal checker') from error
-        for row in rows:
-            path = Path(row['path'])
-            if row['ok']:
-                atomic_write(path.with_suffix('.ok'), b'ok\n')
-            else:
-                failures[path.stem] = row['error']
+        return rows
+
+    # One checker process drives one Apple compiler service (about one core), so run a few batches at once.
+    # ponytail: fixed 4 workers; raise it if validation stays the bottleneck on a many-core machine.
+    batches = [pending[start:start + 128] for start in range(0, len(pending), 128)]
+    with ThreadPoolExecutor(max_workers=max(1, min(os.cpu_count() or 1, 4))) as pool:
+        for rows in pool.map(run, batches):
+            for row in rows:
+                path = Path(row['path'])
+                if row['ok']:
+                    atomic_write(path.with_suffix('.ok'), b'ok\n')
+                else:
+                    failures[path.stem] = row['error']
     return failures
 
 
