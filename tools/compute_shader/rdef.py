@@ -237,6 +237,10 @@ def dxbc_info(dxbc):
         size = struct.unpack_from("<I", dxbc, off + 4)[0]
         chunks[cc] = dxbc[off + 8:off + 8 + size]
     code = chunks.get(b"SHDR") or chunks.get(b"SHEX")
+    if code is None:
+        if b"DXIL" in chunks:
+            raise ValueError("DXIL compute variants require a DXIL-to-Metal translator")
+        raise ValueError("Compute program is missing a DXBC shader code chunk")
     tok = struct.unpack_from("<I", code, 0)[0]
     return (tok >> 4) & 0xF, tok & 0xF, (tok >> 16) & 0xFFFF, chunks
 
