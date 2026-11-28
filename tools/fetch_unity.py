@@ -8,7 +8,15 @@ import sys, os, json, struct, zlib, subprocess, urllib.request
 import xml.etree.ElementTree as ET
 ver, out = sys.argv[1], os.path.abspath(sys.argv[2]); os.makedirs(out, exist_ok=True)
 rel = json.load(urllib.request.urlopen(f'https://services.api.unity.com/unity/editor/release/v1/releases?version={ver}&limit=1'))['results'][0]
-editor = next(d['url'] for d in rel['downloads'] if d['platform'] == 'MAC_OS' and d['architecture'] == 'ARM64')
+
+mac_editors = [d for d in rel.get('downloads', []) if d.get('platform') == 'MAC_OS']
+editor_download = next((d for d in mac_editors if d.get('architecture') == 'ARM64'), None) or next((d for d in mac_editors if d.get('architecture') == 'X86_64'), None)
+if editor_download is None:
+    available = [d.get('architecture') for d in mac_editors]
+    raise SystemExit(f'No macOS editor download for Unity {ver}; available architectures: {available}')
+editor = editor_download['url']
+print('editor architecture:', editor_download['architecture'])
+
 module = next(m['url'] for d in rel['downloads'] if d['platform'] == 'LINUX' for m in d.get('modules', []) if m['id'] == 'mac-mono')
 print('module :', module); print('editor :', editor)
 
