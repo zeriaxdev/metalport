@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Add `natives.py --dissonance`: a macOS stand-in for Dissonance Voice Chat's Windows-only `AudioPluginDissonance` (Lethal Company), so its capture-preprocessing thread no longer dies with `DllNotFoundException`. Audio passes through unchanged (no noise suppression or echo cancellation); speech detection is a loudness gate with a knob, `MP_VAD_DB` (default -48 dBFS). Unit-tested with `tests/test_dissonance_stub.py`; not yet verified with a second player in a real room.
 - Add asset-free tests for `steam_entry.py` (synthetic Steam cache) and `tools/check_no_game_files.py`, which fails if game, Unity or Valve files are tracked or in a release ZIP; add a GitHub Actions workflow that runs both with the existing tests (not yet run on GitHub).
 - Fix `steam_entry.py remove`: it left an empty `rootoverrides` node in Steam's app cache after Steam Cloud had been added.
 - Add read-only diagnostics `tools/dump_common_params.py` and `tools/quality_vsync.py`, and `docs/UPSTREAM-AUDIT.md` (findings from other Unity-on-Mac projects, with licenses).
