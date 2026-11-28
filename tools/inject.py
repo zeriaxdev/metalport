@@ -4,7 +4,8 @@ from metalsub import *
 import cbfix
 import re
 from compute_shader.unityblob import VERSION, parse_params, write_params
-from metal_check import require_valid
+import hashlib
+from metal_check import require_valid, validate_sources
 from compute_support import patch_compute
 from UnityPy.enums import ShaderGpuProgramType as T
 S = os.path.dirname(os.path.abspath(__file__))
@@ -122,7 +123,18 @@ def patch_shader(tt, stats):
         fixed = {i: cbfix.patch_msl(mtl[i], pl[1], pl[2]) for i in progs}
         if any(v is None for v in fixed.values()): stats['cbfix_refused'] += 1; continue
         mtl.update(fixed); params[pidx] = pl[0]; stats['cbfix_scalars_moved'] += len(pl[1])
-    require_valid(mtl.values())  # Check final MSL after cbfix, before changing the shader.
+    try:
+        require_valid(mtl.values())  # Check final MSL after cbfix, before changing the shader.
+    except ValueError:
+        if os.environ.get('ALLOW_PARTIAL_SHADER') != '1' or os.environ.get('ALLOW_METAL_FAILURES') != '1': raise
+        # Separate opt-in (patch_mod_bundles.py only): drop the few variants Metal rejects (e.g. a rare SV_PrimitiveID path) and patch the
+        # rest, instead of aborting the shader. ALLOW_PARTIAL_SHADER alone still never bypasses a compiler failure.
+        bad = validate_sources(mtl.values())            # cached, so this is cheap after the failed check
+        dropped = [i for i, src in mtl.items() if hashlib.sha256(src).hexdigest() in bad]
+        for i in dropped: del mtl[i]
+        stats['omitted_metal_failures'] += len(dropped); stats['partial_shaders'] += 1
+        if not mtl: stats['skip_nothing_translated'] += 1; return False
+        require_valid(mtl.values())
     done = {}; new = []
     for i, s in enumerate(subs):
         if i in mtl: new.append(build_metal_sub(s, mtl[i])); done[i] = True
@@ -131,6 +143,7 @@ def patch_shader(tt, stats):
     metal_params = {}
     for pidx, programs in users.items():
         for program in programs:
+            if program not in mtl: continue          # variant dropped above (Metal rejected it)
             data = remap_metal_params(new[pidx], mtl[program])
             if data != new[pidx]:
                 metal_params[pidx, program] = len(new)
