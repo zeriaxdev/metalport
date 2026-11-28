@@ -3,14 +3,14 @@
 
 usage:
   metalport lookup <game name | steam app id>
-  metalport check <steam app id | game folder>
+  metalport check <steam app id | game folder> [-v]
   metalport port <steam app id | game folder> [--name NAME] [--appid ID] [--steam-play] [--mods]
                  [--allow-incomplete] [--replace] [-v]
 
 Steps: find the game, go/no-go check, fetch the matching Unity Mac player, translate + inject shaders, native stand-ins
 (Steam/Discord/voice), launcher + signing, optional Steam Play button/Cloud and BepInEx mods.
 Output: ports/<Name>/<Name>.app (+ shader reports). Every run writes a full log and a JSON summary to ~/Library/Logs/metalport/.
--v streams every tool's output; otherwise output is shown only for a failing step. NO_COLOR=1 disables colour.
+-v streams every tool's output. NO_COLOR=1 disables colour.
 """
 import argparse, json, os, re, subprocess, sys, threading, time
 ANSI = re.compile(r'\x1b\[[0-9;]*m')
@@ -25,6 +25,14 @@ LOGDIR = Path.home() / 'Library/Logs/metalport'
 TTY = sys.stdout.isatty() and not os.environ.get('NO_COLOR')
 def c(code, s): return f'\033[{code}m{s}\033[0m' if TTY else s
 OK, BAD, WARN, DIM = (lambda s: c('32', s)), (lambda s: c('31', s)), (lambda s: c('33', s)), (lambda s: c('2', s))
+
+
+def coverage_bar(label, covered, total, status):
+    if not total:
+        return f'    {label:<18} —'
+    whole, fraction = divmod(covered * 128 // total, 8)
+    filled = '█' * whole + ('▏▎▍▌▋▊▉'[fraction - 1] if fraction else '')
+    return f'    {label:<18} {OK(filled)}{DIM("░" * (16 - len(filled)))}  {covered}/{total} {status}'
 
 
 class Fail(Exception): pass
@@ -91,7 +99,7 @@ class Run:
     def finish(self, result):
         self.summary['result'] = result; self.summary['finished'] = time.strftime('%Y-%m-%d %H:%M:%S')
         self.json_path.write_text(json.dumps(self.summary, indent=2) + '\n'); self.log.close()
-        print(f'\n  {"Done" if result == "ok" else "Stopped"}. Log: {self.log_path}\n  Summary: {self.json_path}\n')
+        print(f'\n  {"Done." if result == "ok" else "Stopped."}\n  Log: {self.log_path}\n  Summary: {self.json_path}\n')
 
 
 def python_env(run, args):
@@ -158,15 +166,54 @@ def build(run, args):
     if app.exists():
         if not args.replace: raise Fail(f'{app} exists (--replace moves it to the Trash first)')
         os.rename(app, Path.home() / '.Trash' / f'{run.name}-{time.strftime("%Y%m%d-%H%M%S")}.app')
+    source_report = out / 'shader-source-coverage.json'
+    output_report = out / 'shader-output-coverage.json'
+
+    def report_version(path):
+        try:
+            stat = path.stat()
+        except FileNotFoundError:
+            return None
+        return stat.st_ino, stat.st_mtime_ns
+
+    prior_versions = {path: report_version(path) for path in (source_report, output_report)}
     rc, _ = run.sh(run.py, TOOLS / 'port.py', '--data', run.data, '--unity', run.unity_dir, '--out', out, '--name', run.name,
                    *(['--allow-incomplete'] if args.allow_incomplete else []), cwd=TOOLS)
-    rep = next((r for r in (out / 'shader-output-coverage.json', out / 'shader-source-coverage.json') if r.exists()), None)
-    data = json.loads(rep.read_text()) if rep else {}
+    reports = {
+        path: json.loads(path.read_text())
+        for path, before in prior_versions.items()
+        if (after := report_version(path)) is not None and after != before
+    }
+    rep = next((path for path in (output_report, source_report) if path in reports), None)
+    data = reports.get(rep, {})
     issues = len(data.get('issues', []))
-    run.summary['coverage'] = {'counts': data.get('counts'), 'issues': issues, 'complete': data.get('complete'), 'report': str(rep)}
-    if rc: raise Fail(f'{issues} shader issue(s), details in {rep}' + ('' if args.allow_incomplete else '; --allow-incomplete builds anyway'))
+    source = reports.get(source_report, {})
+    translation = source.get('translation', {})
+    compute = source.get('compute_translation', {})
+    run.summary['coverage'] = {'counts': data.get('counts'), 'issues': issues, 'complete': data.get('complete'),
+                               'report': str(rep) if rep else None, 'translation': translation, 'compute_translation': compute}
+    rows = []
+    if translation:
+        rows.append(coverage_bar('Graphics programs', translation['metal_validated'], translation['unique'], 'Metal-validated'))
+    if compute:
+        counts = source['counts']
+        targets = counts.get('ComputeShader', 0) - counts.get('ComputeWithMetal', 0)
+        if targets:
+            rows.append(coverage_bar('Compute shaders', compute['objects'], targets, 'Metal-validated'))
+    if rep == output_report and data['phase'] == 'output' and not any(issue['code'] == 'injection_failed' for issue in data['issues']):
+        counts = data['counts']
+        for label, kind in (('Graphics assets', 'Shader'), ('Compute assets', 'ComputeShader')):
+            metal_count = 'ShaderWithMetal' if kind == 'Shader' else 'ComputeWithMetal'
+            rows.append(coverage_bar(label, counts.get(metal_count, 0), counts.get(kind, 0), 'with Metal in app'))
+    detail = '\n' + '\n'.join(rows) if rows else ''
+    if rc:
+        status = f'port.py exited with status {rc}'
+        if rep:
+            status += f' ({issues} shader {"issue" if issues == 1 else "issues"}, report: {rep.name})'
+        raise Fail(status + detail)
     run.app = app
-    return 'all shaders translated' if not issues else WARN(f'{issues} shader issue(s), built anyway')
+    status = 'Shader audit passed' if not issues else WARN(f'Built with {issues} shader issues')
+    return status + detail
 
 
 def natives(run, args):
@@ -259,19 +306,26 @@ def lookup(query):
 
 def check_game(args, slug):
     args.appid = args.name = None
-    run = Run(f'check-{slug}', False)
+    run = Run(f'check-{slug}', getattr(args, 'verbose', False))
     steps = [('Find game', find_game), ('Python environment', python_env), ('Go/no-go check', inspect)]
     run.total = len(steps)
     for label, fn in steps:
         run.step(label, lambda r, fn=fn: fn(r, args))
-    for label, value in run.summary['inspect'].items():
-        print(f'  {label}: {value}')
-    if 'HDRP' in run.summary['inspect']['Render pipeline']:
-        print('  Experimental: HDRP still needs shader and runtime validation.')
-    elif 'D3D11:' not in run.summary['inspect']['Shaders']:
-        print('  Unknown: no D3D11 variants reported. Check the available shader inputs.')
+    inspection = run.summary['inspect']
+    graphics = inspection['Shaders']
+    total = re.match(r'^(\d+);', graphics)
+    metal = re.search(r'\bMetal:(\d+)', graphics)
+    if total:
+        print(coverage_bar('Graphics shaders', int(metal[1]) if metal else 0, int(total[1]), 'with bundled Metal'))
+    compute = re.match(r'^(\d+) \(Metal present: (\d+);', inspection['Compute shaders'])
+    if compute:
+        print(coverage_bar('Compute shaders', int(compute[2]), int(compute[1]), 'with bundled Metal'))
+    if 'HDRP' in inspection['Render pipeline']:
+        print('  Status: Experimental (HDRP)')
+    elif 'D3D11:' not in graphics:
+        print('  Status: Unknown (no D3D11 shaders found)')
     else:
-        print('  Candidate: Mono and D3D11 found. Shader compilation, native dependencies and gameplay still need testing.')
+        print('  Status: Candidate (build untested)')
     run.finish('ok')
 
 
@@ -283,6 +337,7 @@ def main():
     look.add_argument('query', nargs='+', help='game name or Steam app ID')
     scan = sub.add_parser('check', help='inspect downloaded game data without building a port')
     scan.add_argument('target', help='Steam app id with a local depot or a game folder')
+    scan.add_argument('-v', '--verbose', action='store_true', help="stream every tool's output")
     p = sub.add_parser('port', help='port a game')
     p.add_argument('target', help='Steam app id or game folder'); p.add_argument('--name'); p.add_argument('--appid')
     p.add_argument('--steam-play', action='store_true', help='add the Steam Play button + Steam Cloud (quits and reopens Steam)')
@@ -303,7 +358,7 @@ def main():
     if args.steam_play: steps.append(('Steam Play button + Cloud', lambda r, a: r.must(TOOLS / 'steam-play', r.app, what='steam-play') and 'Play button + Steam Cloud'))
     if args.mods: steps.append(('BepInEx mods', lambda r, a: r.must(TOOLS / 'mods', r.app, 'install', what='mods') and 'BepInEx installed'))
     run.total = len(steps)
-    print(f'\n  metalport · porting {args.target}\n')
+    print(f'\n  metalport: porting {args.target}\n')
     for label, fn in steps: run.step(label, lambda r, fn=fn: fn(r, args))
     print(f'\n  {OK("Ready")}: {run.app}')
     run.finish('ok')
